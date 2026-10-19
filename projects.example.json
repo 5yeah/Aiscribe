@@ -1,0 +1,17 @@
+{
+  "_说明": "项目分类规则（可选）。复制为 projects.json 放在仓库根目录即可生效；也可放到 ~/.aireport/projects.json，或用环境变量 AIREREPORT_PROJECTS 指向任意路径。",
+  "_匹配规则": "rules 按顺序匹配，cwd / 会话标题 / hint 任一包含 keywords 里任一关键词即归到该项目名；顺序敏感，越具体的规则越靠前。未命中任何规则时，自动用 cwd 路径末段目录名做项目名；仍未命中才归入“其他”。",
+  "_title_hints": "某来源（如 WorkBuddy）的 cwd 不是项目目录、只能靠标题关键词补分类时用：键是标题里出现的关键词，值是项目名。",
+  "_项目名写法": "建议直接写纯项目名（如“铜线检测项目”）；括号里的补充说明（如“（点云变化检测）”）会在渲染报告时去掉。",
+  "rules": [
+    {"project": "流程SOP项目", "keywords": ["sop_demo"]},
+    {"project": "点云检测项目", "keywords": ["pointcloud-change", "pcd_change"]},
+    {"project": "面板检测项目", "keywords": ["panel-line"]},
+    {"project": "远程桌面项目", "keywords": ["remotedesk"]},
+    {"project": "Aiscribe", "keywords": ["Aiscribe", "aiscribe", "ai_report"]}
+  ],
+  "title_hints": {
+    "点云": "点云检测项目",
+    "sop_demo": "流程SOP项目"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "_说明": "WorkBuddy / 任意自动化工具的定时任务示例：工作日 18:00 自动生成日报并展示。",
+  "_配置": "把 cwd / open_folder 改成你自己的 Aiscribe 仓库路径；Windows 一键脚本见 scripts/run_daily.bat。",
+  "_输出": "报告只写到本地 reports/ 目录（md 或 --format docx），不外发。",
+  "name": "工作日 AI 日报",
+  "schedule": {
+    "cron": "0 18 * * 1-5",
+    "timezone": "Asia/Shanghai"
+  },
+  "action": {
+    "command": "python -m ai_report daily --date {today}",
+    "cwd": "<你的 Aiscribe 仓库路径>",
+    "show_result": true,
+    "open_folder": "<你的 Aiscribe 仓库路径>/reports"
+  },
+  "constraints": {
+    "output_only_local": true,
+    "note": "如需 Word 版本，把命令改为 python -m ai_report daily --date {today} --format docx"
+  }
+}

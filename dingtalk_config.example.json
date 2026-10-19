@@ -1,0 +1,12 @@
+{
+  "_说明": "复制本文件为 dingtalk_config.json 并填写真实值。凭证（APPKEY/APPSECRET）不要写在这里，走环境变量 DINGTALK_APPKEY / DINGTALK_APPSECRET。",
+  "template_id": "填入钉钉日志模板ID",
+  "userid": "填入员工userid",
+  "to_chat": "",
+  "to_userids": "",
+  "to_cids": "",
+  "field_mapping": {
+    "今日完成工作": "ALL"
+  },
+  "_field_mapping取值说明": "ALL=整篇报告；PROJECTS=仅“按项目汇总”小节；section:未分类=仅对应小节。可按模板字段个数增删键。"
+}

@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aiscribe · 本机 AI 工作总结</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- 引导页这一层允许用 CDN（MCP 内核仍是零依赖 stdio，与本页无关） -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'media',
+    theme: {
+      extend: {
+        fontFamily: {
+          heading: ['"Instrument Serif"', 'Georgia', '"Songti SC"', 'serif'],
+          body: ['"Barlow"', '"PingFang SC"', 'system-ui', 'sans-serif'],
+        },
+        borderRadius: { DEFAULT: '9999px' },
+      },
+    },
+  };
+</script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+<script src="https://unpkg.com/framer-motion@11.11.17/dist/framer-motion.js"></script>
+
+<style>
+/* ============================================================
+   一、token：品牌绿 + 深浅双模式（对比度都按 WCAG AA 调过）
+   数据全程本机，页面本身不联网；只有 CDN 那五个文件需要公网。
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --bg: #EDF3EF;
+  --tint-1: rgba(5, 153, 79, .30);
+  --tint-2: rgba(39, 210, 191, .28);
+  --tint-3: rgba(128, 193, 255, .26);
+  --glass-fill-card: rgba(255, 255, 255, .58);
+  --glass-strong-fill: rgba(255, 255, 255, .74);
+  --text: #16201B;
+  --text-muted: #4A5A52;
+  --border: rgba(22, 32, 27, .12);
+  --brand: #05994F;
+  --brand-on: #FFFFFF;
+  --brand-soft: rgba(5, 153, 79, .10);
+  --brand-ring: rgba(5, 153, 79, .28);
+  --danger: #C0392B;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0A0D0C;
+    --tint-1: rgba(50, 240, 140, .17);
+    --tint-2: rgba(39, 210, 191, .14);
+    --tint-3: rgba(100, 180, 255, .15);
+    --glass-fill-card: rgba(28, 34, 31, .55);
+    --glass-strong-fill: rgba(20, 26, 23, .72);
+    --text: #ECF3EE;
+    --text-muted: #9BAAA2;
+    --border: rgba(255, 255, 255, .14);
+    --brand: #32F08C;
+    --brand-on: #04321C;
+    --brand-soft: rgba(50, 240, 140, .14);
+    --brand-ring: rgba(50, 240, 140, .30);
+    --danger: #FF8A7A;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: 'Barlow', 'PingFang SC', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button { cursor: pointer; font: inherit; color: inherit; background: none; border: 0; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.c-text { color: var(--text); }
+.c-muted { color: var(--text-muted); }
+.c-brand { color: var(--brand); }
+
+/* ============================================================
+   二、液态玻璃（原样保留的质感核心）
+   .liquid-glass   导航 / 胶囊 / 标签 / 卡片
+   .liquid-glass-strong  主 CTA
+   ============================================================ */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 20%,
+    rgba(255,255,255,0) 40%,   rgba(255,255,255,0) 60%,
+    rgba(255,255,255,0.15) 80%, rgba(255,255,255,0.45) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.liquid-glass-strong {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  border: none;
+  box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+.liquid-glass-strong::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.2) 20%,
+    rgba(255,255,255,0) 40%,   rgba(255,255,255,0) 60%,
+    rgba(255,255,255,0.2) 80%, rgba(255,255,255,0.5) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* 内容卡片在规格的 1% 白底之上补一层 token 雾面，密集小字才看得清 */
+.glass-card {
+  background: var(--glass-fill-card) !important;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+.glass-strong {
+  background: var(--glass-strong-fill) !important;
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+}
+
+/* 不支持毛玻璃时退回近乎实底 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass-fill-card: rgba(255,255,255,.96); --glass-strong-fill: rgba(255,255,255,.97); }
+  @media (prefers-color-scheme: dark) {
+    :root { --glass-fill-card: rgba(26,32,29,.96); --glass-strong-fill: rgba(20,26,23,.97); }
+  }
+}
+
+/* ============================================================
+   三、背景层：纯 CSS 光晕，无任何视频 / 图片 / 外链媒体
+   ============================================================ */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  transition: filter 700ms ease;
+}
+.aurora i { position: absolute; display: block; border-radius: 50%; }
+.aurora .b1 {
+  width: 74vmax; height: 74vmax; left: -18vmax; top: -24vmax;
+  background: radial-gradient(circle at 50% 50%, var(--tint-1), transparent 68%);
+  animation: drift1 48s ease-in-out infinite;
+}
+.aurora .b2 {
+  width: 64vmax; height: 64vmax; right: -16vmax; top: -16vmax;
+  background: radial-gradient(circle at 50% 50%, var(--tint-3), transparent 70%);
+  animation: drift2 56s ease-in-out infinite;
+}
+.aurora .b3 {
+  width: 82vmax; height: 82vmax; left: 18vmax; bottom: -36vmax;
+  background: radial-gradient(circle at 50% 50%, var(--tint-2), transparent 72%);
+  animation: drift3 64s ease-in-out infinite;
+}
+@keyframes drift1 { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(3vmax, 4vmax, 0); } }
+@keyframes drift2 { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(-4vmax, 3vmax, 0); } }
+@keyframes drift3 { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(2vmax, -4vmax, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .aurora { transition: none; }
+  .aurora i { animation: none; }
+}
+
+/* ============================================================
+   四、控件与小组件
+   ============================================================ */
+.ginput {
+  background: var(--glass-fill-card);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  border-radius: 12px;
+  padding: 7px 10px;
+  color: var(--text);
+  font-family: 'Barlow', 'PingFang SC', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 18px;
+}
+.ginput::placeholder { color: var(--text-muted); }
+.ginput-lg { border-radius: 14px; padding: 10px 14px; font-size: 14px; }
+
+.seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; }
+.seg > button { border-radius: 999px; padding: 6px 14px; font-size: 13px; line-height: 20px; color: var(--text-muted); transition: color .15s ease, background .15s ease; }
+.seg > button:hover { color: var(--text); }
+.seg > button[data-on="1"] { background: var(--brand); color: var(--brand-on); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  border-radius: 999px; padding: 6px 12px 6px 10px;
+  font-size: 12px; line-height: 18px;
+  color: var(--text-muted);
+  transition: color .15s ease, border-color .15s ease, opacity .15s ease;
+}
+.chip[data-on="1"] { color: var(--text); }
+.chip[data-on="0"] { opacity: .55; }
+.chip[data-trim="1"] { border-style: dashed !important; }
+.chip .lb { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip .sc { flex: none; border-radius: 999px; padding: 2px 7px; color: var(--text-muted); font-size: 12px; line-height: 16px; }
+.chip .sc:hover { color: var(--brand); }
+.chip .bdg { flex: none; color: var(--brand); font-size: 11px; line-height: 16px; }
+
+/* 模板/选项整行：不用 .chip，免得与 Tailwind 的 padding 工具类抢优先级 */
+.optrow {
+  display: flex; align-items: flex-start; gap: 10px;
+  border-radius: 20px; padding: 14px 16px;
+  color: var(--text-muted);
+  transition: color .15s ease, opacity .15s ease;
+}
+.optrow[data-on="1"] { color: var(--text); }
+.optrow[data-on="0"] { opacity: .62; }
+
+/* 勾选框：.chip 与 .optrow 共用，直接子元素定位 */
+.box {
+  width: 14px; height: 14px; flex: none; border-radius: 4px;
+  border: 1.5px solid var(--text-muted); position: relative;
+}
+.optrow > .box { margin-top: 3px; }
+[data-on="1"] > .box { border-color: var(--brand); background: var(--brand); }
+[data-on="1"] > .box::after {
+  content: ""; position: absolute; left: 3.5px; top: 0.5px; width: 4px; height: 8px;
+  border: solid var(--brand-on); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+.tag {
+  display: inline-flex; align-items: center;
+  border-radius: 999px; padding: 2px 9px;
+  font-size: 11px; line-height: 16px; color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.tag-hi { color: var(--brand); border-color: var(--brand); }
+
+.step-live { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 3px var(--brand-ring); }
+  50%      { box-shadow: 0 0 0 7px rgba(0, 0, 0, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .step-live { animation: none; box-shadow: 0 0 0 4px var(--brand-ring); } }
+
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
+
+.lamp { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--text-muted); }
+.lamp-on { background: var(--brand); }
+
+.scroll-y { overflow-y: auto; }
+.scroll-y::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-y::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+
+.drop {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.drop[data-over="1"] { border-color: var(--brand); }
+
+/* 骨架预览：两种模板排版一眼能看出差别 */
+.sk-p { font-size: 14px; line-height: 22px; font-weight: 500; padding-top: 8px; color: var(--text); }
+.sk-p:first-child { padding-top: 0; }
+.sk-i { display: flex; gap: 8px; padding-top: 4px; }
+.sk-i b { color: var(--brand); font-weight: 500; flex: none; }
+.sk-i span { color: var(--text-muted); font-size: 12px; line-height: 18px; }
+
+/* 断网兜底：CDN 取不到时给一句人话，而不是白屏 */
+#boot-fallback {
+  display: none;
+  position: relative;
+  z-index: 99;
+  max-width: 640px;
+  margin: 12vh auto;
+  padding: 28px 30px;
+  border: 1px solid #cfe0d6;
+  border-radius: 16px;
+  background: #fff;
+  color: #16201B;
+  font: 400 14px/22px 'PingFang SC', system-ui, sans-serif;
+}
+#boot-fallback h1 { font-size: 18px; margin: 0 0 10px; }
+#boot-fallback code { background: #eef3f0; border-radius: 6px; padding: 2px 6px; }
+#boot-fallback button { margin-top: 16px; padding: 8px 16px; border-radius: 999px; border: 0; background: #05994F; color: #fff; font: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div id="boot-fallback">
+  <h1>引导页的界面库没加载出来</h1>
+  <p>这个引导页要用公网 CDN 上的 Tailwind / React / Framer Motion。看起来当前网络不通（或 CDN 被挡了）。</p>
+  <p>不影响报告能力：你仍可以直接用 <code>python -m ai_report daily --date 2026-10-16 --format md</code>，
+     或让 AI 客户端经 MCP 的 <code>get_conversations</code> 取素材。</p>
+  <button type="button" onclick="location.reload()">重试</button>
+</div>
+
+<div id="root"></div>
+
+<script>
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    if (!(window.React && window.ReactDOM && window.Motion)) {
+      var fb = document.getElementById('boot-fallback');
+      if (fb) { fb.style.display = 'block'; }
+      var root = document.getElementById('root');
+      if (root) { root.style.display = 'none'; }
+    }
+  }, 2500);
+});
+
+// framer-motion 的 motion.* 组件会把无 key 的静态兄弟子元素当成列表，
+// 于是 dev 版 React 会刷一条「unique key」警告（本页所有 .map 列表都自带 key）。
+// 只过滤这一条，其它 console.error 原样保留。
+(function () {
+  var raw = console.error;
+  console.error = function () {
+    if (typeof arguments[0] === 'string' && arguments[0].indexOf('unique "key" prop') >= 0) { return; }
+    return raw.apply(console, arguments);
+  };
+})();
+</script>
+
+<script type="text/babel">
+(function () {
+  if (!window.React || !window.ReactDOM || !window.Motion) { return; }
+
+  var React = window.React;
+  var ReactDOM = window.ReactDOM;
+  var FM = window.Motion;
+  var motion = FM.motion;
+  var AnimatePresence = FM.AnimatePresence;
+  var useReduced = FM.useReducedMotion || function () { return false; };
+  var useState = React.useState;
+  var useEffect = React.useEffect;
+  var useRef = React.useRef;
+
+  // ------------------------------------------------------------
+  // 通用工具
+  // ------------------------------------------------------------
+
+  function api(path, options) {
+    return fetch(path, options).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok) { throw new Error(body.error || ('HTTP ' + res.status)); }
+        return body;
+      });
+    });
+  }
+
+  function post(path, payload) {
+    return api(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+  function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function todayIso() { return isoOf(new Date()); }
+  function shiftDays(iso, n) {
+    var d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return isoOf(d);
+  }
+  function weekRange(iso) {
+    var d = new Date(iso + 'T00:00:00');
+    var back = (d.getDay() + 6) % 7;           // 周一 = 0
+    var mon = new Date(d); mon.setDate(d.getDate() - back);
+    var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return { start: isoOf(mon), end: isoOf(sun) };
+  }
+
+  function convQuery(mode, date, start, end, detail) {
+    var q = '/api/conversations?mode=' + mode + '&detail=' + (detail || 'summary');
+    if (mode === 'range') { q += '&start=' + start + '&end=' + end; }
+    else { q += '&date=' + date; }
+    return q;
+  }
+
+  function cleanTitle(rec) {
+    var text = (rec.title || rec.summary || '').replace(/\[[^\]]*\]/g, '')
+      .replace(/@image:[^\s]+/g, '').replace(/\s+/g, ' ').trim();
+    return text || '(无标题会话)';
+  }
+  function clip(text, n) { return text.length > n ? text.slice(0, n) + '…' : text; }
+  function startTime(rec) { return (rec.time || '').split('~')[0]; }
+
+  // BlurText 分词：英文按空格，中文按字（不然一整句只会是一个词）
+  function splitWords(text) {
+    var out = [];
+    String(text || '').split(/\s+/).filter(Boolean).forEach(function (tok) {
+      if (/[\u4e00-\u9fa5]/.test(tok) && tok.length > 1) {
+        Array.prototype.forEach.call(tok, function (ch) { out.push(ch); });
+      } else { out.push(tok); }
+    });
+    return out;
+  }
+
+  function fadeUp(reduced, delay) {
+    return {
+      initial: reduced ? { opacity: 0 } : { filter: 'blur(10px)', opacity: 0, y: 20 },
+      animate: reduced ? { opacity: 1 } : { filter: 'blur(0px)', opacity: 1, y: 0 },
+      transition: { duration: reduced ? 0 : 0.6, ease: 'easeOut', delay: reduced ? 0 : (delay || 0) },
+    };
+  }
+
+  function pageVariants(reduced) {
+    return {
+      enter: function (d) {
+        return { x: reduced ? 0 : (d > 0 ? 32 : -32), opacity: 0, filter: reduced ? 'blur(0px)' : 'blur(10px)' };
+      },
+      center: function () {
+        return { x: 0, opacity: 1, filter: 'blur(0px)',
+          transition: reduced ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' } };
+      },
+      exit: function (d) {
+        return { x: reduced ? 0 : (d > 0 ? -24 : 24), opacity: 0, filter: reduced ? 'blur(0px)' : 'blur(6px)',
+          transition: reduced ? { duration: 0 } : { duration: 0.22, ease: 'easeOut' } };
+      },
+    };
+  }
+
+  // ------------------------------------------------------------
+  // 基础组件
+  // ------------------------------------------------------------
+
+  function BlurText(props) {
+    var ref = useRef(null);
+    var reduced = useReduced();
+    var st = useState(false);
+    var on = st[0], setOn = st[1];
+
+    useEffect(function () {
+      var node = ref.current;
+      if (!node) { return; }
+      if (typeof IntersectionObserver === 'undefined') { setOn(true); return; }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) { if (e.isIntersecting) { setOn(true); io.disconnect(); } });
+      }, { threshold: 0.1 });
+      io.observe(node);
+      return function () { io.disconnect(); };
+    }, []);
+
+    var words = splitWords(props.text);
+    return (
+      <p ref={ref}
+         className={props.className || ''}
+         style={{ display: 'flex', flexWrap: 'wrap', justifyContent: props.align || 'center', rowGap: '.1em', margin: 0 }}>
+        {words.map(function (w, i) {
+          var cjk = /[\u4e00-\u9fa5]/.test(w) && w.length === 1;
+          var base = { display: 'inline-block', marginRight: cjk ? '0.1em' : '0.28em' };
+          if (!on || reduced) {
+            return <span key={i} style={base} className={props.wordClassName || ''}>{w}</span>;
+          }
+          return (
+            <motion.span key={i} style={base} className={props.wordClassName || ''}
+              initial={{ filter: 'blur(10px)', opacity: 0, y: 50 }}
+              animate={{ filter: ['blur(10px)', 'blur(5px)', 'blur(0px)'], opacity: [0, 0.5, 1], y: [50, -5, 0] }}
+              transition={{ duration: 0.7, times: [0, 0.5, 1], ease: 'easeOut', delay: (i * 100) / 1000 }}>
+              {w}
+            </motion.span>
+          );
+        })}
+      </p>
+    );
+  }
+
+  function RollNumber(props) {
+    var reduced = useReduced();
+    var st = useState(0);
+    var v = st[0], setV = st[1];
+    useEffect(function () {
+      var target = props.value || 0;
+      if (reduced) { setV(target); return; }
+      var from = 0, started = Date.now(), dur = 700, raf = 0;
+      var step = function () {
+        var t = Math.min(1, (Date.now() - started) / dur);
+        var e = 1 - Math.pow(1 - t, 3);
+        setV(Math.round(from + (target - from) * e));
+        if (t < 1) { raf = requestAnimationFrame(step); }
+      };
+      raf = requestAnimationFrame(step);
+      return function () { cancelAnimationFrame(raf); };
+    }, [props.value, reduced]);
+    return <span>{v.toLocaleString('zh-CN')}</span>;
+  }
+
+  function Kicker(props) {
+    return <p className="c-muted mb-3 text-xs tracking-[0.2em]">{props.children}</p>;
+  }
+
+  function Lamp(props) {
+    return <span className={'lamp' + (props.on ? ' lamp-on' : '')}></span>;
+  }
+
+  function Stepper(props) {
+    var steps = [1, 2, 3, 4];
+    var cur = props.current;
+    return (
+      <div className="flex items-center gap-1.5 md:gap-2" role="tablist" aria-label="步骤">
+        {steps.map(function (n, i) {
+          var done = n < cur;
+          var active = n === cur;
+          var reachable = n <= cur;
+          var style = {};
+          if (active) {
+            style.background = 'var(--brand)';
+            style.color = 'var(--brand-on)';
+            style.boxShadow = '0 0 0 3px var(--brand-ring)';
+          } else if (done) {
+            style.border = '1px solid var(--brand)';
+            style.color = 'var(--brand)';
+            style.background = 'var(--brand-soft)';
+          } else {
+            style.border = '1px solid var(--border)';
+            style.color = 'var(--text-muted)';
+          }
+          return (
+            <React.Fragment key={n}>
+              {i > 0 ? (
+                <span className="relative block h-[2px] w-5 overflow-hidden rounded-full md:w-9"
+                      style={{ background: 'var(--border)' }}>
+                  <motion.span className="absolute inset-0 block"
+                    style={{ background: 'var(--brand)', transformOrigin: 'left center' }}
+                    initial={false}
+                    animate={{ scaleX: n <= cur ? 1 : 0 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }} />
+                </span>
+              ) : null}
+              <button type="button"
+                role="tab"
+                aria-selected={active}
+                aria-label={'第 ' + n + ' 步'}
+                disabled={!reachable}
+                onClick={function () { if (reachable && !active) { props.onJump(n); } }}
+                className={'relative flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium font-body' + (active ? ' step-live' : '')}
+                style={Object.assign({ cursor: reachable ? 'pointer' : 'not-allowed' }, style)}>
+                {done ? '✓' : n}
+              </button>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  }
+
+  function TopBar(props) {
+    var st = useState(false);
+    var ask = st[0], setAsk = st[1];
+    return (
+      <motion.header
+        className="fixed inset-x-0 top-4 z-40 flex items-center justify-between px-8 lg:px-16"
+        initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}>
+        <div className="liquid-glass flex h-12 w-12 flex-none items-center justify-center rounded-full">
+          <span className="font-heading text-2xl italic c-brand">a</span>
+        </div>
+
+        <div className="liquid-glass hidden items-center gap-3 rounded-full px-1.5 py-1.5 md:flex">
+          <div className="pl-2">
+            <Stepper current={props.current} onJump={props.onJump} />
+          </div>
+          {ask ? (
+            <span className="flex items-center gap-1 pr-1">
+              <span className="c-muted px-2 text-xs">清空选择并回到启动屏？</span>
+              <button type="button" className="rounded-full px-3 py-1.5 text-xs font-medium"
+                      style={{ background: 'var(--brand)', color: 'var(--brand-on)' }}
+                      onClick={function () { setAsk(false); props.onRestart(); }}>确定</button>
+              <button type="button" className="c-muted rounded-full px-2 py-1.5 text-xs"
+                      onClick={function () { setAsk(false); }}>取消</button>
+            </span>
+          ) : (
+            <button type="button" className="c-muted rounded-full px-3 py-1.5 text-xs font-medium hover:c-text"
+                    onClick={function () { setAsk(true); }}>重新开始</button>
+          )}
+        </div>
+
+        <div className="h-12 w-12 flex-none"></div>
+      </motion.header>
+    );
+  }
+
+  function Footer() {
+    return (
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center pb-3">
+        <span className="liquid-glass c-muted pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs">
+          <Lamp on={true} />
+          数据全程本机 · 只监听 127.0.0.1 · 不上传
+        </span>
+      </div>
+    );
+  }
+
+  function StepFooter(props) {
+    return (
+      <div className="mt-10 flex flex-wrap items-center gap-6">
+        <button type="button"
+          className="liquid-glass-strong rounded-full px-5 py-2.5 text-sm font-medium c-text disabled:opacity-40"
+          disabled={props.disabled}
+          style={{ cursor: props.disabled ? 'not-allowed' : 'pointer' }}
+          onClick={props.onNext}>
+          {props.label || '下一步'}
+          <svg viewBox="0 0 24 24" className="ml-2 inline-block h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M7 17L17 7"></path><path d="M7 7h10v10"></path>
+          </svg>
+        </button>
+        {props.backLabel ? (
+          <button type="button" className="c-muted text-sm font-body hover:c-text" onClick={props.onBack}>{props.backLabel}</button>
+        ) : null}
+        <span className="c-muted text-xs font-body">{props.note || ''}</span>
+      </div>
+    );
+  }
+
+  // ------------------------------------------------------------
+  // Splash 启动屏：并行预取 /api/sources，与「至少 1.2s」取较晚者
+  // ------------------------------------------------------------
+
+  function Splash(props) {
+    var reduced = useReduced();
+    var st = useState('');
+    var err = st[0], setErr = st[1];
+    var st2 = useState(0);
+    var tryCount = st2[0], setTryCount = st2[1];
+    var listRef = useRef(null);
+
+    // 预取 /api/sources 与「至少 1.2s」取较晚者，既不闪屏也不空等
+    useEffect(function () {
+      var alive = true;
+      var ready = false, minDone = false, fired = false;
+      var fire = function () {
+        if (!alive || fired || !ready || !minDone) { return; }
+        fired = true;
+        props.onDone(listRef.current || []);
+      };
+      var timer = setTimeout(function () { minDone = true; fire(); }, 1200);
+      api('/api/sources').then(function (list) {
+        if (!alive) { return; }
+        listRef.current = list;
+        ready = true; fire();
+      }).catch(function (e) {
+        if (!alive) { return; }
+        setErr(e.message || '读取数据源失败');
+      });
+      return function () { alive = false; clearTimeout(timer); };
+    }, [tryCount]);
+
+    return (
+      <motion.div
+        className="fixed inset-0 z-30 flex flex-col items-center justify-center px-6"
+        style={{ background: 'var(--bg)' }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        exit={{ opacity: 0, filter: 'blur(10px)', transition: { duration: reduced ? 0 : 0.4, ease: 'easeOut' } }}>
+        <div className="liquid-glass flex h-12 w-12 items-center justify-center rounded-full">
+          <span className="font-heading text-2xl italic c-brand">a</span>
+        </div>
+
+        <div className="mt-7 h-[2px] w-[120px] overflow-hidden rounded-full" style={{ background: 'var(--border)' }}>
+          {reduced ? (
+            <span className="block h-full w-1/3 rounded-full" style={{ background: 'var(--brand)' }}></span>
+          ) : (
+            <motion.span className="block h-full w-1/3 rounded-full" style={{ background: 'var(--brand)' }}
+              animate={{ x: ['-120%', '340%'] }}
+              transition={{ repeat: Infinity, duration: 1.6, ease: 'easeInOut' }} />
+          )}
+        </div>
+
+        <div className="mt-6">
+          <BlurText text="Aiscribe · 本机 AI 工作总结" className="c-muted font-body text-sm" />
+        </div>
+
+        {err ? (
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <p className="text-xs font-body" style={{ color: 'var(--danger)' }}>读取数据源失败：{err}</p>
+            <button type="button"
+              className="liquid-glass c-brand rounded-full px-3.5 py-1.5 text-xs font-body"
+              onClick={function () { setErr(''); setTryCount(tryCount + 1); }}>重试</button>
+          </div>
+        ) : null}
+      </motion.div>
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 屏 ①：AI 工具选择（逐源真实扫描，读完才亮）
+  // ------------------------------------------------------------
+
+  function StepSources(props) {
+    var reduced = useReduced();
+    var variants = pageVariants(reduced);
+    var list = props.sources || [];
+    var scan = props.scan || {};
+    var prog = props.progress || { done: 0, total: 0, count: 0 };
+    var ready = props.done;
+
+    return (
+      <motion.div variants={variants} custom={props.dir} initial="enter" animate="center" exit="exit"
+                  className="mx-auto w-full max-w-4xl px-8 lg:px-16">
+        <motion.div {...fadeUp(reduced, 0.05)}>
+          <Kicker>// 第 1 步 · 4</Kicker>
+          <h1 className="font-heading italic text-5xl leading-[0.95] tracking-[-2px] c-text md:text-6xl">
+            选择要读的 AI 工具
+          </h1>
+          <p className="c-muted mt-5 max-w-xl text-sm font-body font-light leading-snug">
+            逐个源在本机真实扫描，读到多少条才写多少——数字来自硬盘里的会话文件，不是估算。
+          </p>
+        </motion.div>
+
+        <motion.div className="mt-9 space-y-3" {...fadeUp(reduced, 0.12)}>
+          {list.map(function (src) {
+            var s = scan[src.name] || {};
+            var state = src.available ? (s.state || 'wait') : 'off';
+            var count = s.count;
+            return (
+              <div key={src.name} className="liquid-glass glass-card flex flex-wrap items-center gap-3 rounded-[1.25rem] px-5 py-4">
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                  {state === 'scan' ? (
+                    <span className="spin inline-block h-3.5 w-3.5 flex-none rounded-full"
+                          style={{ border: '2px solid var(--brand)', borderTopColor: 'transparent' }}></span>
+                  ) : (
+                    <Lamp on={state === 'ok'} />
+                  )}
+                  <span className="c-text truncate text-sm font-medium font-body">{src.name}</span>
+                </span>
+                <span className="c-muted w-[104px] flex-none text-right font-mono text-xs">
+                  {state === 'ok' ? <RollNumber value={count || 0} /> : null}
+                  {state === 'ok' ? ' 条' : null}
+                  {state === 'wait' ? '待扫描' : null}
+                  {state === 'scan' ? '扫描中…' : null}
+                  {state === 'off' ? '未检测到' : null}
+                  {state === 'fail' ? '读取失败' : null}
+                </span>
+                <span className={'tag flex-none' + (src.content_level.indexOf('原文') > -1 || src.content_level.indexOf('正文') > -1 ? ' tag-hi' : '')}>
+                  {src.content_level}
+                </span>
+              </div>
+            );
+          })}
+          {!list.length ? <p className="c-muted text-sm font-body">正在读取本机数据源清单…</p> : null}
+        </motion.div>
+
+        <motion.div {...fadeUp(reduced, 0.2)}>
+          <StepFooter
+            disabled={!ready}
+            onNext={props.onNext}
+            label={ready ? '下一步' : '扫描中…'}
+            note={list.length ? '已扫描 ' + prog.done + ' / ' + prog.total + ' 个可用源，累计 ' + prog.count + ' 条会话' : ''} />
+          <p className="c-muted mt-4 text-xs font-body">数据全程本机，只读不写。</p>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 屏 ②：时间选择
+  // ------------------------------------------------------------
+
+  function StepTime(props) {
+    var reduced = useReduced();
+    var variants = pageVariants(reduced);
+    var mode = props.mode;
+    var week = mode === 'weekly' ? weekRange(props.date) : null;
+    var valid = mode === 'range'
+      ? (props.start && props.end && props.start <= props.end)
+      : !!props.date;
+
+    return (
+      <motion.div variants={variants} custom={props.dir} initial="enter" animate="center" exit="exit"
+                  className="mx-auto w-full max-w-3xl px-8 lg:px-16">
+        <motion.div {...fadeUp(reduced, 0.05)}>
+          <Kicker>// 第 2 步 · 4</Kicker>
+          <h1 className="font-heading italic text-5xl leading-[0.95] tracking-[-2px] c-text md:text-6xl">
+            定下报告的时间窗
+          </h1>
+          <p className="c-muted mt-5 max-w-xl text-sm font-body font-light leading-snug">
+            窗口之外的内容在取数时就被丢掉，不会进素材，也不会进报告。
+          </p>
+        </motion.div>
+
+        <motion.div className="mt-9" {...fadeUp(reduced, 0.12)}>
+          <div className="liquid-glass glass-card inline-flex rounded-full p-1">
+            <span className="seg">
+              {[['daily', '日报'], ['weekly', '周报'], ['range', '自定义时间']].map(function (it) {
+                return (
+                  <button key={it[0]} type="button" data-on={mode === it[0] ? '1' : '0'}
+                          onClick={function () { props.onMode(it[0]); }}>{it[1]}</button>
+                );
+              })}
+            </span>
+          </div>
+
+          <div className="liquid-glass glass-card mt-4 flex flex-wrap items-end gap-5 rounded-[1.25rem] p-6">
+            {mode === 'range' ? (
+              <React.Fragment>
+                <label className="flex flex-col gap-2">
+                  <span className="c-muted text-xs font-body">从</span>
+                  <input type="date" className="ginput ginput-lg" value={props.start}
+                         onChange={function (e) { props.onStart(e.target.value); }} />
+                </label>
+                <label className="flex flex-col gap-2">
+                  <span className="c-muted text-xs font-body">到</span>
+                  <input type="date" className="ginput ginput-lg" value={props.end}
+                         onChange={function (e) { props.onEnd(e.target.value); }} />
+                </label>
+              </React.Fragment>
+            ) : (
+              <label className="flex flex-col gap-2">
+                <span className="c-muted text-xs font-body">{mode === 'weekly' ? '周内任意一天' : '报告日期'}</span>
+                <input type="date" className="ginput ginput-lg" value={props.date}
+                       onChange={function (e) { props.onDate(e.target.value); }} />
+              </label>
+            )}
+
+            <div className="flex flex-col gap-2">
+              <span className="c-muted text-xs font-body">报告窗口</span>
+              <span className="c-text font-mono text-sm">
+                {mode === 'range'
+                  ? (props.start && props.end ? props.start + ' ~ ' + props.end : '—')
+                  : (mode === 'weekly' ? week.start + ' ~ ' + week.end : props.date)}
+              </span>
+            </div>
+          </div>
+
+          {mode === 'range' ? (
+            <p className="c-muted mt-3 text-xs font-body">
+              起点晚于终点会自动把终点拉过去，反之亦然。默认给近 7 天。
+            </p>
+          ) : null}
+
+          <div className="liquid-glass glass-card mt-4 rounded-[1.25rem] px-6 py-5">
+            {props.error ? (
+              <p className="text-sm font-body" style={{ color: 'var(--danger)' }}>
+                读取窗口失败：{props.error}
+                <button type="button" className="c-brand ml-3 text-xs underline" onClick={props.onRetry}>重试</button>
+              </p>
+            ) : props.loading || !props.payload ? (
+              <p className="c-muted text-sm font-body">正在按窗口取数…</p>
+            ) : (
+              <p className="c-text text-sm font-body">
+                窗口内共 <b className="c-brand"><RollNumber value={props.payload.total_records} /></b> 条会话 ·
+                <b className="c-brand"> {(props.payload.projects || []).length}</b> 个项目
+              </p>
+            )}
+          </div>
+        </motion.div>
+
+        <motion.div {...fadeUp(reduced, 0.2)}>
+          <StepFooter disabled={!valid || props.loading || !!props.error} onNext={props.onNext}
+                      onBack={props.onBack} backLabel="上一步" />
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 屏 ③：对话选择（含时间剪辑）
+  // ------------------------------------------------------------
+
+  function StepRecords(props) {
+    var reduced = useReduced();
+    var variants = pageVariants(reduced);
+    var payload = props.payload || { projects: [], total_records: 0 };
+    var projects = payload.projects || [];
+    var total = payload.total_records || 0;
+    var picked = props.picked || [];
+
+    return (
+      <motion.div variants={variants} custom={props.dir} initial="enter" animate="center" exit="exit"
+                  className="mx-auto w-full max-w-6xl px-8 lg:px-16">
+        <motion.div {...fadeUp(reduced, 0.05)}>
+          <Kicker>// 第 3 步 · 4</Kicker>
+          <h1 className="font-heading italic text-5xl leading-[0.95] tracking-[-2px] c-text md:text-6xl">
+            挑出要交给 AI 的对话
+          </h1>
+          <p className="c-muted mt-5 max-w-2xl text-sm font-body font-light leading-snug">
+            默认全选。取消勾选的记录不会出现在素材里，AI 也就不会写进报告。
+            每条右侧的剪刀可设起止时间：窗口外的片段已被工具丢弃，AI 看不到。
+          </p>
+        </motion.div>
+
+        <motion.div className="mt-8 flex flex-wrap items-center gap-2" {...fadeUp(reduced, 0.12)}>
+          <button type="button" className="liquid-glass c-muted rounded-full px-3.5 py-1.5 text-xs font-body hover:c-brand" onClick={props.onAll}>全选</button>
+          <button type="button" className="liquid-glass c-muted rounded-full px-3.5 py-1.5 text-xs font-body hover:c-brand" onClick={props.onNone}>全不选</button>
+          <button type="button" className="liquid-glass c-muted rounded-full px-3.5 py-1.5 text-xs font-body hover:c-brand" onClick={props.onClearTrims}>清空全部剪辑</button>
+          <span className="c-muted ml-auto font-mono text-xs">
+            已选 {picked.length} / {total} 条
+            {props.trimCount ? '（' + props.trimCount + ' 条已剪辑）' : ''}
+          </span>
+        </motion.div>
+
+        <motion.div className="mt-4 space-y-5" {...fadeUp(reduced, 0.2)}>
+          {props.loading ? <p className="c-muted text-sm font-body">正在按项目整理素材…</p> : null}
+          {props.error ? (
+            <p className="text-sm font-body" style={{ color: 'var(--danger)' }}>
+              读取素材失败：{props.error}
+              <button type="button" className="c-brand ml-3 text-xs underline" onClick={props.onRetry}>重试</button>
+            </p>
+          ) : null}
+          {!props.loading && !projects.length ? (
+            <p className="c-muted text-sm font-body">这个窗口内没有会话记录。换个日期或换一批 AI 工具试试。</p>
+          ) : null}
+
+          {projects.map(function (group) {
+            return (
+              <div key={group.project} className="liquid-glass glass-card rounded-[1.25rem] p-5">
+                <div className="flex flex-wrap items-baseline gap-3">
+                  <h2 className="c-text text-sm font-medium font-body">{group.project}</h2>
+                  <span className="c-muted text-xs font-body">{group.records.length} 条素材</span>
+                  <button type="button" className="c-muted ml-auto text-xs font-body hover:c-brand"
+                          onClick={function () { props.onToggleGroup(group); }}>本组全选/全不选</button>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {group.records.map(function (rec) {
+                    var trimmed = !!props.trims[rec.id];
+                    return (
+                      <div key={rec.id}
+                           className="liquid-glass chip"
+                           data-on={props.checked[rec.id] ? '1' : '0'}
+                           data-trim={trimmed ? '1' : undefined}
+                           role="checkbox"
+                           aria-checked={props.checked[rec.id] ? 'true' : 'false'}
+                           tabIndex={0}
+                           onClick={function () { props.onToggle(rec.id); }}
+                           onKeyDown={function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onToggle(rec.id); } }}>
+                        <span className="box"></span>
+                        <span className="lb" title={rec.source + ' ' + (rec.time || '') + '\n' + cleanTitle(rec)}>
+                          {clip(cleanTitle(rec), 24) + (startTime(rec) ? ' · ' + startTime(rec) : '')}
+                        </span>
+                        {trimmed ? <span className="bdg">已剪辑</span> : null}
+                        <span className="tag">{rec.source}</span>
+                        <button type="button" className="sc" title="剪辑这条素材的时间范围" aria-label="剪辑时间范围"
+                                onClick={function (e) { e.stopPropagation(); props.onTrim(rec); }}>✂</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </motion.div>
+
+        <motion.div {...fadeUp(reduced, 0.28)}>
+          <StepFooter disabled={!picked.length} onNext={props.onNext} onBack={props.onBack}
+                      backLabel="上一步"
+                      note={picked.length ? '' : '至少勾选一条素材'} />
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  function TrimPanel(props) {
+    var st = useState({ start: '', end: '' });
+    var win = st[0], setWin = st[1];
+    var reduced = useReduced();
+
+    useEffect(function () {
+      var cur = props.record ? (props.trims[props.record.id] || {}) : {};
+      setWin({ start: cur.start || '', end: cur.end || '' });
+    }, [props.record]);
+
+    useEffect(function () {
+      var onKey = function (e) { if (e.key === 'Escape') { props.onClose(); } };
+      window.addEventListener('keydown', onKey);
+      return function () { window.removeEventListener('keydown', onKey); };
+    }, [props.onClose]);
+
+    return (
+      <motion.div className="fixed inset-0 z-50 flex items-center justify-center px-6"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: reduced ? 0 : 0.2 }}>
+        <div className="absolute inset-0" style={{ background: 'rgba(12,20,16,.30)', backdropFilter: 'blur(4px)' }}
+             onClick={props.onClose}></div>
+        <div className="liquid-glass glass-strong relative w-full max-w-md rounded-[1.25rem] p-6">
+          <h3 className="c-text text-sm font-medium font-body">时间剪辑</h3>
+          <p className="c-text mt-2 text-[13px] leading-5 font-body break-words">
+            素材：{props.record ? clip(cleanTitle(props.record), 40) : ''}
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-5">
+            <label className="flex items-center gap-2">
+              <span className="c-muted text-xs font-body">从</span>
+              <input type="time" step="60" className="ginput" value={win.start}
+                     onChange={function (e) { setWin({ start: e.target.value, end: win.end }); }} />
+            </label>
+            <label className="flex items-center gap-2">
+              <span className="c-muted text-xs font-body">到</span>
+              <input type="time" step="60" className="ginput" value={win.end}
+                     onChange={function (e) { setWin({ start: win.start, end: e.target.value }); }} />
+            </label>
+          </div>
+          <p className="c-muted mt-3 text-xs leading-5 font-body">
+            只保留窗口内的片段，窗口外的会被工具直接丢弃；两端都留空 = 不剪辑。
+            「到」早于「从」按跨夜处理（如 22:30 ~ 02:00）。
+          </p>
+          {props.error ? <p className="mt-2 text-xs font-body" style={{ color: 'var(--danger)' }}>{props.error}</p> : null}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button type="button" className="rounded-full px-4 py-2 text-xs font-medium"
+                    style={{ background: 'var(--brand)', color: 'var(--brand-on)' }}
+                    onClick={function () { props.onSave(win.start, win.end); }}>保存剪辑</button>
+            <button type="button" className="liquid-glass c-muted rounded-full px-4 py-2 text-xs font-body hover:c-brand"
+                    onClick={function () { props.onSave('', ''); }}>清除这条剪辑</button>
+            <button type="button" className="liquid-glass c-muted rounded-full px-4 py-2 text-xs font-body hover:c-brand"
+                    onClick={props.onClose}>关闭</button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ------------------------------------------------------------
+  // 屏 ④：模板选择
+  // ------------------------------------------------------------
+
+  var MARKS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨'];
+  var CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+
+  function projLine(idx, name, style) {
+    var clean = String(name || '').replace(/（[^）]*）/g, '').trim();
+    if (!style) { return (CN_NUM[idx - 1] || idx) + '、' + clean; }
+    var punct = style.project_punct || '、';
+    if (style.project_kind === 'bold-name-only') { return clean + '：'; }
+    if (style.project_kind === 'hash') { return idx + punct + clean; }
+    if (style.project_kind === 'plain-arabic' || style.project_kind === 'bold-arabic') { return idx + punct + clean + '：'; }
+    return idx + punct + clean;
+  }
+
+  function itemMark(i, style) {
+    var s = style && style.item_style;
+    if (!s) { return (i + 1) + '.'; }
+    if (s === 'numeric' || s === 'hash3') { return (i + 1) + '.'; }
+    if (s === 'dash') { return '-'; }
+    return MARKS[i] || '·';
+  }
+
+  function StepTemplate(props) {
+    var reduced = useReduced();
+    var variants = pageVariants(reduced);
+    var fileRef = useRef(null);
+    var st = useState(false);
+    var over = st[0], setOver = st[1];
+    var tpls = props.templates || [];
+
+    var onFiles = function (files) {
+      if (files && files.length) { props.onLearn(files); }
+    };
+
+    return (
+      <motion.div variants={variants} custom={props.dir} initial="enter" animate="center" exit="exit"
+                  className="mx-auto w-full max-w-6xl px-8 lg:px-16">
+        <motion.div {...fadeUp(reduced, 0.05)}>
+          <Kicker>// 第 4 步 · 4</Kicker>
+          <h1 className="font-heading italic text-5xl leading-[0.95] tracking-[-2px] c-text md:text-6xl">
+            排版照你以前的来
+          </h1>
+          <p className="c-muted mt-5 max-w-2xl text-sm font-body font-light leading-snug">
+            学的是排版，不搬内容。也可以直接上传一份你以前写的日报，让本机把它学成模板。
+          </p>
+        </motion.div>
+
+        <div className="mt-9 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,1fr)]">
+          <motion.div className="space-y-3" {...fadeUp(reduced, 0.12)}>
+            <div className="liquid-glass optrow"
+                 data-on={props.selected ? '0' : '1'}
+                 role="radio" aria-checked={props.selected ? 'false' : 'true'} tabIndex={0}
+                 onClick={function () { props.onSelect(''); }}
+                 onKeyDown={function (e) { if (e.key === 'Enter') { props.onSelect(''); } }}>
+              <span className="box"></span>
+              <span className="flex-1">
+                <span className="c-text block text-sm font-medium font-body">不套用模板</span>
+                <span className="c-muted block text-xs font-body">按生成器的默认格式输出</span>
+              </span>
+            </div>
+
+            {tpls.map(function (t) {
+              var on = props.selected === t.name;
+              return (
+                <div key={t.name} className="liquid-glass optrow"
+                     data-on={on ? '1' : '0'}
+                     role="radio" aria-checked={on ? 'true' : 'false'} tabIndex={0}
+                     onClick={function () { props.onSelect(t.name); }}
+                     onKeyDown={function (e) { if (e.key === 'Enter') { props.onSelect(t.name); } }}>
+                  <span className="box"></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="c-text text-sm font-medium font-body">{t.name}</span>
+                      <span className={'tag' + (t.pending_vision ? '' : ' tag-hi')}>
+                        {t.pending_vision ? '待 AI 读图' : '样例 ' + t.sample_count + ' 份'}
+                      </span>
+                    </span>
+                    <span className="c-muted mt-1 block text-xs leading-5 font-body"
+                          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      {t.spec ? clip(String(t.spec).replace(/\s+/g, ' ').trim(), 120) : '（还没有抽到结构，样例是图片，等 AI 读图后回填）'}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+            {!tpls.length && !props.loading ? (
+              <p className="c-muted text-sm font-body">还没有学到的模板。上传一两份你以前写的日报试试。</p>
+            ) : null}
+
+            <div className="liquid-glass glass-card rounded-[1.25rem] p-4">
+              <p className="c-text text-sm font-medium font-body">格式克隆</p>
+              <div className="drop mt-3 p-3" data-over={over ? '1' : '0'}
+                   onDragOver={function (e) { e.preventDefault(); setOver(true); }}
+                   onDragLeave={function () { setOver(false); }}
+                   onDrop={function (e) { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files); }}>
+                <input ref={fileRef} type="file" multiple className="hidden"
+                       accept=".md,.markdown,.txt,.text,.docx,.png,.jpg,.jpeg,.webp,.bmp,.gif"
+                       onChange={function (e) { onFiles(e.target.files); e.target.value = ''; }} />
+                <p className="c-muted text-xs font-body">把 md / txt / docx / 图片拖进来，或</p>
+                <button type="button" className="liquid-glass c-brand mt-2 rounded-full px-3.5 py-1.5 text-xs font-body"
+                        onClick={function () { if (fileRef.current) { fileRef.current.click(); } }}>选择文件</button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input type="text" className="ginput min-w-0 flex-1" placeholder="模板名（留空则用「我的模板」）"
+                       value={props.learnName} onChange={function (e) { props.onLearnName(e.target.value); }} />
+                <button type="button" className="liquid-glass c-brand rounded-full px-4 py-2 text-xs font-body"
+                        onClick={function () { if (fileRef.current) { fileRef.current.click(); } }}>选文件</button>
+              </div>
+              <p className="c-muted mt-3 text-xs leading-5 font-body whitespace-pre-wrap">{props.learnNote}</p>
+            </div>
+          </motion.div>
+
+          <motion.div {...fadeUp(reduced, 0.2)}>
+            <div className="liquid-glass glass-card flex min-h-[320px] flex-col rounded-[1.25rem] p-5">
+              <p className="c-muted text-xs font-body">报告骨架预览 · 占位文字不是真实会话</p>
+              <div className="scroll-y mt-4 max-h-[360px] flex-1">
+                {props.skeleton.length ? props.skeleton.map(function (row, i) {
+                  if (row.type === 'p') { return <div key={i} className="sk-p">{row.text}</div>; }
+                  return (
+                    <div key={i} className="sk-i">
+                      <b>{row.mark}</b>
+                      <span>{row.text}</span>
+                    </div>
+                  );
+                }) : <p className="c-muted text-sm font-body">勾选素材并选中模板后，这里实时显示报告骨架。</p>}
+              </div>
+
+              {props.detail && props.detail.pending_vision ? (
+                <p className="mt-4 text-xs leading-5 font-body" style={{ color: 'var(--brand)' }}>
+                  这是图片样例，需要让 AI 读图后回填：把样例与下面这段一起交给它。
+                  <span className="c-muted mt-1 block whitespace-pre-wrap">{clip(props.detail.image_hint || '', 220)}</span>
+                </p>
+              ) : null}
+            </div>
+
+            <div className="liquid-glass glass-card mt-4 rounded-[1.25rem] p-5">
+              <p className="c-muted text-xs font-body">输出格式</p>
+              <div className="seg mt-3">
+                {[['md', 'Markdown'], ['docx', 'Word'], ['html', '可分享 HTML']].map(function (it) {
+                  return (
+                    <button key={it[0]} type="button" data-on={props.fmt === it[0] ? '1' : '0'}
+                            onClick={function () { props.onFmt(it[0]); }}>{it[1]}</button>
+                  );
+                })}
+              </div>
+              <button type="button"
+                className="liquid-glass-strong mt-5 w-full rounded-full px-5 py-3 text-sm font-medium c-text disabled:opacity-40"
+                disabled={!props.canGenerate}
+                style={{ cursor: props.canGenerate ? 'pointer' : 'not-allowed' }}
+                onClick={props.onGenerate}>
+                生成「交给 AI 的指令」
+              </button>
+              <p className="c-muted mt-3 text-xs leading-5 font-body">
+                正文仍由你的 AI 客户端归纳；这一步只是把格式、取数参数与勾选的记录 id 拼成一段指令。
+              </p>
+            </div>
+            <div className="mt-4 flex items-center gap-6">
+              <button type="button" className="c-muted text-sm font-body hover:c-text"
+                      onClick={props.onBack}>上一步</button>
+              {!props.canGenerate ? (
+                <span className="c-muted text-xs font-body">先回到上一步勾选素材</span>
+              ) : null}
+            </div>
+          </motion.div>
+        </div>
+
+        {props.error ? (
+          <p className="mt-5 text-sm font-body" style={{ color: 'var(--danger)' }}>{props.error}</p>
+        ) : null}
+      </motion.div>
+    );
+  }
+
+  // ------------------------------------------------------------
+  // Generating：等待页（进度全部来自真实请求）
+  // ------------------------------------------------------------
+
+  var STAGES = [
+    { key: 'read', label: '读取素材', note: '正在读取本机对话原文' },
+    { key: 'group', label: '按项目聚合' },
+    { key: 'tpl', label: '套用模板' },
+    { key: 'instr', label: '生成指令' },
+    { key: 'ready', label: '素材就绪' },
+  ];
+
+  function Generating(props) {
+    var reduced = useReduced();
+    var variants = pageVariants(reduced);
+    var st = useState({ read: 'idle', group: 'idle', tpl: 'idle', instr: 'idle', ready: 'idle' });
+    var stages = st[0], setStages = st[1];
+    var st2 = useState(null);
+    var stats = st2[0], setStats = st2[1];
+    var st3 = useState('');
+    var text = st3[0], setText = st3[1];
+    var st4 = useState('');
+    var error = st4[0], setError = st4[1];
+    var st5 = useState(0);
+    var tick = st5[0], setTick = st5[1];
+    var st6 = useState(false);
+    var copied = st6[0], setCopied = st6[1];
+    var st7 = useState('');
+    var tplNote = st7[0], setTplNote = st7[1];
+    var st8 = useState(null);
+    var report = st8[0], setReport = st8[1];
+    var st9 = useState(false);
+    var genBusy = st9[0], setGenBusy = st9[1];
+    var st10 = useState('');
+    var genErr = st10[0], setGenErr = st10[1];
+    var st11 = useState(null);
+    var llmInfo = st11[0], setLlmInfo = st11[1];
+    var st12 = useState(true);
+    var useAi = st12[0], setUseAi = st12[1];
+
+    var setStage = function (key, value) {
+      setStages(function (prev) { var next = Object.assign({}, prev); next[key] = value; return next; });
+    };
+
+    useEffect(function () {
+      var alive = true;
+      var wait = function (ms) {
+        return new Promise(function (r) { setTimeout(r, reduced ? 0 : ms); });
+      };
+      setStages({ read: 'run', group: 'idle', tpl: 'idle', instr: 'idle', ready: 'idle' });
+      setStats(null); setText(''); setError(''); setTplNote('');
+      setReport(null); setGenErr('');
+
+      // 归纳能力状态：本地读配置，毫秒级；先发起，等"素材就绪"那一步再 await，避免竞态
+      var llmReady = api('/api/llm').then(function (info) {
+        if (alive) { setLlmInfo(info); }
+        return info;
+      }).catch(function () { return null; });
+
+      api(convQuery(props.mode, props.date, props.start, props.end, 'full')).then(function (full) {
+        if (!alive) { return; }
+        setStage('read', 'done');
+        setStage('group', 'run');
+        setStats({ records: full.total_records, projects: (full.projects || []).length });
+        return wait(700);
+      }).then(function () {
+        if (!alive) { return; }
+        setStage('group', 'done');
+        setStage('tpl', 'run');
+        if (!props.template) { setTplNote('未套模板'); return null; }
+        return api('/api/template?name=' + encodeURIComponent(props.template)).then(function (t) {
+          if (!alive) { return null; }
+          setTplNote('已套用「' + t.name + '」' + (t.pending_vision ? '（图片样例，指令里会让 AI 先读图）' : ''));
+          return wait(400);
+        });
+      }).then(function () {
+        if (!alive) { return null; }
+        setStage('tpl', 'done');
+        setStage('instr', 'run');
+        return post('/api/instruction', {
+          ids: props.ids, mode: props.mode, date: props.date,
+          start: props.start, end: props.end, format: props.fmt, template: props.template || '',
+        });
+      }).then(function (data) {
+        if (!alive) { return; }
+        setText(data.text);
+        setStage('instr', 'done');
+        setStage('ready', 'run');
+        return wait(500);
+      }).then(function () {
+        if (!alive) { return; }
+        setStage('ready', 'done');
+        // 走到这一步就直接出报告：不再让用户多点一次「生成」。
+        // 等 /api/llm 落地再决定要不要归纳；失败只记 genErr，不打断页面
+        return llmReady;
+      }).then(function (info) {
+        if (!alive) { return; }
+        runGenerate(!!info && info.ready);
+      }).catch(function (e) {
+        if (!alive) { return; }
+        setError(e.message || '生成失败');
+      });
+
+      return function () { alive = false; };
+    }, [tick]);
+
+    var keys = STAGES.map(function (s) { return s.key; });
+    var finished = keys.filter(function (k) { return stages[k] === 'done'; }).length;
+    var ratio = finished / keys.length;
+    var stopped = !!error;
+    var R = 46;
+    var C = 2 * Math.PI * R;
+
+    var copyText = function () {
+      var done = function () { setCopied(true); setTimeout(function () { setCopied(false); }, 2400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e) { /* 手动复制 */ }
+        document.body.removeChild(ta);
+        done();
+      }
+    };
+
+    // 直接出报告：走后端 POST /api/generate（按勾选 + 剪辑过滤素材 → 渲染 → 按需 LLM 归纳 → 落盘）。
+    // 等待页走完最后一个阶段会自动调一次；按钮只是"再来一份"，失败也只记 genErr，不打断页面
+    var runGenerate = function (polish) {
+      setGenBusy(true); setGenErr('');
+      return post('/api/generate', {
+        ids: props.ids, mode: props.mode, date: props.date,
+        start: props.start, end: props.end,
+        format: props.fmt, template: props.template || '',
+        polish: !!polish,
+      }).then(function (data) {
+        setReport(data); setGenBusy(false);
+      }).catch(function (e) {
+        setGenBusy(false); setGenErr(e.message || '生成失败');
+      });
+    };
+    // 手动按钮：按当前开关，只有确实配好了归纳能力才请求归纳
+    var genReport = function () { runGenerate(useAi && !!(llmInfo && llmInfo.ready)); };
+
+    return (
+      <motion.div variants={variants} custom={props.dir} initial="enter" animate="center" exit="exit"
+                  className="mx-auto w-full max-w-3xl px-8 lg:px-16">
+        <motion.div className="flex flex-col items-center" {...fadeUp(reduced, 0.05)}>
+          <Kicker>// 正在准备素材</Kicker>
+
+          <div className="relative h-[120px] w-[120px]">
+            <svg viewBox="0 0 120 120" className="h-full w-full" aria-hidden="true">
+              <circle cx="60" cy="60" r={R} fill="none" stroke="var(--border)" strokeWidth="4" />
+              <motion.circle cx="60" cy="60" r={R} fill="none"
+                stroke="var(--brand)" strokeWidth="4" strokeLinecap="round"
+                strokeDasharray={C}
+                initial={false}
+                animate={{ strokeDashoffset: C * (1 - ratio) }}
+                transition={{ duration: reduced ? 0 : 0.6, ease: 'easeOut' }}
+                style={{ transform: 'rotate(-90deg)', transformOrigin: '60px 60px' }} />
+              {!reduced && !stopped && ratio < 1 ? (
+                <motion.circle cx="60" cy="60" r={R} fill="none"
+                  stroke="var(--brand)" strokeWidth="2" strokeLinecap="round"
+                  strokeDasharray="16 999" opacity={0.5}
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 1.6, ease: 'linear' }}
+                  style={{ transformOrigin: '60px 60px' }} />
+              ) : null}
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="c-text font-mono text-sm">{finished} / {keys.length}</span>
+            </div>
+          </div>
+
+          {stages.ready === 'done' ? (
+            <div className="mt-8">
+              <BlurText text="素材已就绪，直接出报告"
+                className="font-heading italic c-text text-4xl leading-[0.95] tracking-[-2px] md:text-5xl" />
+            </div>
+          ) : (
+            <h1 className="c-text mt-8 font-heading italic text-4xl leading-[0.95] tracking-[-2px] md:text-5xl">
+              {stopped ? '停在这一步了' : '正在读取本机对话'}
+            </h1>
+          )}
+          <p className="c-muted mt-4 text-sm font-body">
+            {stopped ? error : '全程本机读取，不上传任何内容。'}
+          </p>
+          {stopped ? (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+              <button type="button" className="liquid-glass-strong rounded-full px-5 py-2.5 text-sm font-medium c-text"
+                      onClick={function () { setTick(tick + 1); }}>重试</button>
+              <button type="button" className="c-muted text-sm font-body hover:c-text" onClick={props.onBack}>返回修改</button>
+            </div>
+          ) : null}
+        </motion.div>
+
+        <div className="liquid-glass glass-card mt-9 rounded-[1.25rem] p-5">
+          {STAGES.map(function (s, i) {
+            var state = stages[s.key];
+            return (
+              <motion.div key={s.key}
+                className="flex flex-wrap items-center gap-3 py-2.5"
+                initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: reduced ? 0 : 0.3, ease: 'easeOut', delay: reduced ? 0 : i * 0.05 }}>
+                <span className="flex-none">
+                  {state === 'done' ? (
+                    <span className="c-brand text-sm">✓</span>
+                  ) : state === 'run' ? (
+                    <span className="spin inline-block h-3.5 w-3.5 rounded-full"
+                          style={{ border: '2px solid var(--brand)', borderTopColor: 'transparent' }}></span>
+                  ) : (
+                    <Lamp on={false} />
+                  )}
+                </span>
+                <span className={'text-sm font-body ' + (state === 'idle' ? 'c-muted' : 'c-text')}>{s.label}</span>
+                <span className="c-muted text-xs font-body">
+                  {s.key === 'read' && state === 'run' ? '正在读取本机对话原文' : ''}
+                  {s.key === 'tpl' && tplNote ? tplNote : ''}
+                </span>
+                <span className="c-text ml-auto font-mono text-xs">
+                  {s.key === 'group' && stats ? (
+                    <React.Fragment>
+                      <RollNumber value={stats.records} /> 条 · {stats.projects} 个项目
+                    </React.Fragment>
+                  ) : ''}
+                </span>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        {stages.ready === 'done' ? (
+          <motion.div className="mt-7" {...fadeUp(reduced, 0.05)}>
+            <div className="flex flex-wrap items-center gap-4">
+              <button type="button"
+                className="liquid-glass-strong rounded-full px-6 py-3 text-sm font-medium c-text disabled:opacity-40"
+                style={{ cursor: genBusy ? 'progress' : 'pointer' }}
+                disabled={genBusy}
+                onClick={genReport}>
+                {genBusy ? (useAi && llmInfo && llmInfo.ready ? '正在用 AI 归纳…' : '正在生成报告…')
+                         : (report ? '再生成一份' : '生成报告')}
+              </button>
+              <button type="button"
+                className="liquid-glass rounded-full px-5 py-2.5 text-sm font-medium c-text"
+                onClick={copyText}>{copied ? '已复制' : '复制指令'}</button>
+              <button type="button" className="c-muted text-sm font-body hover:c-text" onClick={props.onBack}>返回修改</button>
+              {genErr ? (
+                <span className="text-xs font-body" style={{ color: 'var(--danger)' }}>{genErr}</span>
+              ) : null}
+            </div>
+
+            <label className="mt-4 flex cursor-pointer flex-wrap items-center gap-2 text-xs font-body c-muted">
+              <input type="checkbox" checked={useAi} disabled={!!llmInfo && !llmInfo.ready}
+                     onChange={function (e) { setUseAi(e.target.checked); }}
+                     className="h-4 w-4 accent-[var(--brand)]" />
+              <span>
+                {llmInfo && llmInfo.ready
+                  ? '用 ' + llmInfo.provider + '（' + llmInfo.model + '）把草稿归纳成内容级摘要'
+                  : 'AI 归纳未启用 —— 出的会是纯模板草稿（逐条对话原文，不做归纳）'}
+              </span>
+              {llmInfo && !llmInfo.ready ? (
+                <span className="c-muted">
+                  未配置 {llmInfo.missing}；填到一个 llm.json（{llmInfo.config_file || '仓库根/llm.json'}）或设成同名环境变量后刷新本页
+                </span>
+              ) : null}
+            </label>
+
+            <p className="c-muted mt-3 text-xs font-body leading-relaxed">
+              「生成报告」在本机渲染并按上面的开关决定是否归纳，文件写进 reports/，只上传已汇总草稿、不上传原始对话；
+              「复制指令」交给你的 AI 客户端读原文归纳，质量更高 —— 那种情况下 md 由客户端落盘，
+              {props.fmt === 'docx' ? 'Word' : props.fmt === 'html' ? '可分享 HTML' : 'md'} 需客户端调用 save_report 保存。
+            </p>
+
+            {report ? (
+              <motion.div className="liquid-glass glass-card mt-5 rounded-[1.25rem] p-5" {...fadeUp(reduced, 0.05)}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="c-brand text-sm">✓</span>
+                  <span className="c-text text-sm font-body">报告已写到本机</span>
+                  <span className="c-muted ml-auto font-mono text-xs">{report.name}</span>
+                </div>
+                <p className={'mt-2 text-xs font-body ' + (report.polished ? 'c-brand' : 'c-muted')}>
+                  {report.polished
+                    ? '正文已由 ' + report.llm.provider + '（' + report.llm.model + '）归纳'
+                    : '未归纳，正文是纯模板草稿：' + (report.llm_error || '本次未请求归纳')}
+                </p>
+                <p className="c-muted mt-2 break-all font-mono text-[11px] leading-relaxed">{report.path}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-4">
+                  <span className="c-muted text-xs font-body">
+                    {report.total} 条素材 · {report.projects} 个项目 · {String(report.format).toUpperCase()}
+                  </span>
+                  <a className="liquid-glass-strong rounded-full px-4 py-2 text-xs font-medium c-text"
+                     href={report.url} target="_blank" rel="noreferrer">
+                    {report.format === 'html' ? '在浏览器打开' : '打开报告'}
+                  </a>
+                  <a className="c-muted text-xs font-body hover:c-text"
+                     href={report.url} download={report.name}>下载到本地</a>
+                </div>
+                {report.format === 'md' ? (
+                  <textarea readOnly value={report.text} rows={8}
+                    className="ginput scroll-y mt-3 w-full font-mono text-xs" />
+                ) : (
+                  <p className="c-muted mt-3 text-xs font-body">
+                    {report.format === 'docx' ? 'Word 文件已落盘，点「下载到本地」保存。'
+                                               : '自包含 HTML，可直接分享给他人。'}
+                  </p>
+                )}
+              </motion.div>
+            ) : null}
+
+            <p className="c-muted mt-6 text-xs font-body">交给 AI 客户端的指令（可复制）</p>
+            <textarea readOnly value={text} rows={6}
+              className="ginput scroll-y mt-2 w-full font-mono text-xs" />
+          </motion.div>
+        ) : null}
+      </motion.div>
+    );
+  }
+
+  // ------------------------------------------------------------
+  // App：六屏调度、状态、与后端接口的唯一接触面
+  // ------------------------------------------------------------
+
+  function App() {
+    var reduced = useReduced();
+    var st = useState('splash');
+    var screen = st[0], setScreen = st[1];
+    var stDir = useState(1);
+    var dir = stDir[0], setDir = stDir[1];
+
+    var stSrc = useState(null);
+    var sources = stSrc[0], setSources = stSrc[1];
+    var stScan = useState({});
+    var scan = stScan[0], setScan = stScan[1];
+    var stProg = useState({ done: 0, total: 0, count: 0 });
+    var progress = stProg[0], setProgress = stProg[1];
+    var stScanDone = useState(false);
+    var scanDone = stScanDone[0], setScanDone = stScanDone[1];
+    var scanRef = useRef(false);
+
+    var stMode = useState('daily');
+    var mode = stMode[0], setMode = stMode[1];
+    var stDate = useState(todayIso());
+    var date = stDate[0], setDate = stDate[1];
+    var stStart = useState(shiftDays(todayIso(), -6));
+    var start = stStart[0], setStart = stStart[1];
+    var stEnd = useState(todayIso());
+    var end = stEnd[0], setEnd = stEnd[1];
+
+    var stPayload = useState(null);
+    var payload = stPayload[0], setPayload = stPayload[1];
+    var stLoad = useState(false);
+    var loading = stLoad[0], setLoading = stLoad[1];
+    var stConvErr = useState('');
+    var convErr = stConvErr[0], setConvErr = stConvErr[1];
+
+    var stChecked = useState({});
+    var checked = stChecked[0], setChecked = stChecked[1];
+    var stTrims = useState({});
+    var trims = stTrims[0], setTrims = stTrims[1];
+    var stTrimErr = useState('');
+    var trimErr = stTrimErr[0], setTrimErr = stTrimErr[1];
+    var stTrimRec = useState(null);
+    var trimRec = stTrimRec[0], setTrimRec = stTrimRec[1];
+
+    var stTpls = useState([]);
+    var templates = stTpls[0], setTemplates = stTpls[1];
+    var stTplSel = useState('');
+    var tplSel = stTplSel[0], setTplSel = stTplSel[1];
+    var stTplDetail = useState(null);
+    var tplDetail = stTplDetail[0], setTplDetail = stTplDetail[1];
+    var stTplLoaded = useState(false);
+    var tplLoaded = stTplLoaded[0], setTplLoaded = stTplLoaded[1];
+    var stLearnName = useState('');
+    var learnName = stLearnName[0], setLearnName = stLearnName[1];
+    var stLearnNote = useState('本机解析，样例不上传；只学排版，不搬内容。');
+    var learnNote = stLearnNote[0], setLearnNote = stLearnNote[1];
+    var stTplErr = useState('');
+    var tplErr = stTplErr[0], setTplErr = stTplErr[1];
+    var stFmt = useState('md');
+    var fmt = stFmt[0], setFmt = stFmt[1];
+
+    var stSession = useState(0);
+    var session = stSession[0], setSession = stSession[1];
+
+    var stepNum = screen === 'gen' ? 5 : (typeof screen === 'number' ? screen : 0);
+
+    // ---- ① 逐源真实扫描（串行，读完才点亮）----
+    useEffect(function () {
+      if (screen !== 1 || !sources || scanRef.current) { return; }
+      scanRef.current = true;
+      var usable = sources.filter(function (s) { return s.available; });
+      var done = 0, total = 0, alive = true;
+      setProgress({ done: 0, total: usable.length, count: 0 });
+      var chain = Promise.resolve();
+      usable.forEach(function (src) {
+        chain = chain.then(function () {
+          if (!alive) { return; }
+          setScan(function (prev) { var n = Object.assign({}, prev); n[src.name] = { state: 'scan' }; return n; });
+          return api('/api/source?name=' + encodeURIComponent(src.name)).then(function (data) {
+            if (!alive) { return; }
+            setScan(function (prev) {
+              var n = Object.assign({}, prev);
+              n[src.name] = { state: data.available ? 'ok' : 'off', count: data.count };
+              return n;
+            });
+            total += data.count;
+          }).catch(function () {
+            if (!alive) { return; }
+            setScan(function (prev) { var n = Object.assign({}, prev); n[src.name] = { state: 'fail' }; return n; });
+          }).then(function () {
+            done += 1;
+            if (alive) { setProgress({ done: done, total: usable.length, count: total }); }
+          });
+        });
+      });
+      chain.then(function () { if (alive) { setScanDone(true); } });
+      return function () { alive = false; };
+    }, [screen, sources]);
+
+    // 源不可用的项也标出来（不参与扫描）
+    useEffect(function () {
+      if (!sources) { return; }
+      setScan(function (prev) {
+        var n = Object.assign({}, prev);
+        sources.forEach(function (s) {
+          if (!s.available && !n[s.name]) { n[s.name] = { state: 'off' }; }
+        });
+        return n;
+      });
+    }, [sources]);
+
+    // ---- ② 取窗口素材（summary；③ 复用同一份）----
+    var reloadConversations = function () {
+      setLoading(true); setConvErr('');
+      api(convQuery(mode, date, start, end, 'summary')).then(function (data) {
+        setPayload(data);
+        // 已见过的记录沿用用户原来的勾选，只有这个窗口新出现的记录才默认勾上；
+        // 这样从 ③ 退回 ② 换个日期再进来，不会把之前的选择悄悄清掉
+        setChecked(function (prev) {
+          var n = {};
+          (data.projects || []).forEach(function (g) {
+            (g.records || []).forEach(function (r) {
+              n[r.id] = prev[r.id] === undefined ? true : prev[r.id];
+            });
+          });
+          return n;
+        });
+        // 剪辑状态以服务端为准（保存剪辑会落进 trims.json，重新取数时带回来）
+        setTrims(function () {
+          var tm = {};
+          (data.projects || []).forEach(function (g) {
+            (g.records || []).forEach(function (r) { if (r.trim) { tm[r.id] = r.trim; } });
+          });
+          return tm;
+        });
+        setLoading(false);
+      }).catch(function (e) {
+        setLoading(false); setConvErr(e.message || '读取失败'); setPayload(null);
+      });
+    };
+
+    useEffect(function () {
+      if (screen !== 2) { return; }
+      reloadConversations();
+    }, [screen, mode, date, start, end]);
+
+    // ---- ④ 模板清单 ----
+    useEffect(function () {
+      if (screen !== 4 || tplLoaded) { return; }
+      setTplLoaded(true);
+      api('/api/templates').then(function (list) {
+        setTemplates(list || []);
+        if (list && list.length) { selectTemplate(list[0].name); }
+      }).catch(function (e) { setTplErr('读取模板失败：' + (e.message || '')); });
+    }, [screen]);
+
+    var selectTemplate = function (name) {
+      setTplSel(name || '');
+      if (!name) { setTplDetail(null); return; }
+      api('/api/template?name=' + encodeURIComponent(name))
+        .then(function (t) { setTplDetail(t); })
+        .catch(function (e) { setTplErr('读取模板失败：' + (e.message || '')); });
+    };
+
+    // ---- 勾选 / 剪辑 ----
+    var groups = (payload && payload.projects) || [];
+    var picked = [];
+    groups.forEach(function (g) {
+      (g.records || []).forEach(function (r) { if (checked[r.id]) { picked.push(r.id); } });
+    });
+    var trimCount = picked.filter(function (id) { return !!trims[id]; }).length;
+
+    var toggle = function (id) {
+      setChecked(function (prev) { var n = Object.assign({}, prev); n[id] = !n[id]; return n; });
+    };
+    var toggleGroup = function (group) {
+      var ids = (group.records || []).map(function (r) { return r.id; });
+      var anyOff = ids.some(function (id) { return !checked[id]; });
+      setChecked(function (prev) {
+        var n = Object.assign({}, prev);
+        ids.forEach(function (id) { n[id] = anyOff; });
+        return n;
+      });
+    };
+    var setAll = function (v) {
+      var n = {};
+      groups.forEach(function (g) { (g.records || []).forEach(function (r) { n[r.id] = v; }); });
+      setChecked(n);
+    };
+
+    var saveTrim = function (rec, s, e) {
+      setTrimErr('');
+      post('/api/trim', { id: rec.id, start: s, end: e }).then(function (data) {
+        setTrims(function (prev) {
+          var n = Object.assign({}, prev);
+          if (data.trim) { n[rec.id] = data.trim; } else { delete n[rec.id]; }
+          return n;
+        });
+        setTrimRec(null);
+      }).catch(function (err) { setTrimErr(err.message || '剪辑失败'); });
+    };
+    var clearAllTrims = function () {
+      setTrimErr('');
+      post('/api/trim', { clear: true }).then(function () {
+        setTrims({});
+      }).catch(function (err) { setTrimErr(err.message || '清空剪辑失败'); });
+    };
+
+    // ---- 学模板（base64 上传）----
+    var learn = function (files) {
+      setLearnNote('正在学排版…（本机解析，样例不上传）');
+      setTplErr('');
+      var reads = Array.prototype.map.call(files, function (f) {
+        return new Promise(function (resolve, reject) {
+          var fr = new FileReader();
+          fr.onload = function () {
+            var t = String(fr.result);
+            var i = t.indexOf(',');
+            resolve({ name: f.name, data: i >= 0 ? t.slice(i + 1) : t });
+          };
+          fr.onerror = function () { reject(new Error('读取 ' + f.name + ' 失败')); };
+          fr.readAsDataURL(f);
+        });
+      });
+      Promise.all(reads).then(function (items) {
+        return post('/api/learn', { files: items, name: learnName.trim() });
+      }).then(function (data) {
+        setLearnNote(data.pending_vision
+          ? '样例是图片，本机不做识图。已存档，把读图提示连同图片交给 AI 回填。'
+          : '已学成模板「' + data.name + '」（样例 ' + data.sample_count + ' 份），之后生成的报告都按它的排版。');
+        return api('/api/templates').then(function (list) {
+          setTemplates(list || []);
+          selectTemplate(data.name);
+        });
+      }).catch(function (e) { setLearnNote('学习失败：' + (e.message || '')); });
+    };
+
+    // ---- 骨架预览（占位短句，不用真实会话内容）----
+    var skeleton = [];
+    var style = tplDetail ? tplDetail.style : null;
+    groups.forEach(function (g) {
+      var recs = (g.records || []).filter(function (r) { return checked[r.id]; });
+      if (!recs.length) { return; }
+      skeleton.push({ type: 'p', text: projLine(skeleton.filter(function (x) { return x.type === 'p'; }).length + 1, g.project, style) });
+      recs.slice(0, 3).forEach(function (r, i) {
+        skeleton.push({ type: 'i', mark: itemMark(i, style), text: '事项摘要占位（' + clip(cleanTitle(r), 12) + ' 的时间点）' });
+      });
+      if (recs.length > 3) {
+        skeleton.push({ type: 'i', mark: '…', text: '另有 ' + (recs.length - 3) + ' 条素材交给 AI 一并归纳' });
+      }
+    });
+
+    // ---- 导航 ----
+    var goTo = function (next, d) {
+      setDir(d);
+      setScreen(next);
+    };
+    var jump = function (n) { goTo(n, n < stepNum ? -1 : 1); };
+    var restart = function () {
+      setSources(null); setScan({}); setScanDone(false); scanRef.current = false;
+      setProgress({ done: 0, total: 0, count: 0 });
+      setPayload(null); setChecked({}); setTrims({}); setTrimRec(null);
+      setTemplates([]); setTplSel(''); setTplDetail(null); setTplLoaded(false);
+      setLearnNote('本机解析，样例不上传；只学排版，不搬内容。'); setFmt('md');
+      setSession(session + 1);
+      setDir(-1);
+      setScreen('splash');
+    };
+
+    var timeModeChange = function (next) {
+      setConvErr('');
+      if (next === 'range') {
+        // 进「自定义时间」默认给近 7 天
+        var e = end || todayIso();
+        setEnd(e);
+        if (!start || start > e) { setStart(shiftDays(e, -6)); }
+      }
+      setMode(next);
+    };
+    var dateChange = function (v) {
+      if (!v) { return; }
+      setConvErr('');
+      if (mode === 'range' && end < v) { setEnd(v); }   // 起点晚于终点 → 拉终点
+      setDate(v);
+    };
+    var startChange = function (v) {
+      if (!v) { return; }
+      setConvErr('');
+      setStart(v);
+      if (end && end < v) { setEnd(v); }
+    };
+    var endChange = function (v) {
+      if (!v) { return; }
+      setConvErr('');
+      setEnd(v);
+      if (start && start > v) { setStart(v); }
+    };
+
+    var convUrlFor = function (detail) { return convQuery(mode, date, start, end, detail); };
+    var canGenerate = picked.length > 0;
+
+    var tintMap = { splash: 0, 1: -10, 2: 10, 3: -22, 4: 16, gen: -6 };
+    var tint = tintMap[screen] === undefined ? 0 : tintMap[screen];
+
+    // ---- 渲染 ----
+    var current = null;
+    if (screen === 1) {
+      current = <StepSources key="s1" dir={dir} sources={sources || []} scan={scan} progress={progress}
+                            done={scanDone} onNext={function () { goTo(2, 1); }} />;
+    } else if (screen === 2) {
+      current = <StepTime key="s2" dir={dir} mode={mode} date={date} start={start} end={end}
+                         payload={payload} loading={loading} error={convErr}
+                         onMode={timeModeChange} onDate={dateChange} onStart={startChange} onEnd={endChange}
+                         onRetry={reloadConversations}
+                         onNext={function () { goTo(3, 1); }} onBack={function () { goTo(1, -1); }} />;
+    } else if (screen === 3) {
+      current = <StepRecords key="s3" dir={dir} payload={payload} loading={loading} error={convErr}
+                             checked={checked} trims={trims} picked={picked} trimCount={trimCount}
+                             onAll={function () { setAll(true); }} onNone={function () { setAll(false); }}
+                             onToggle={toggle} onToggleGroup={toggleGroup} onClearTrims={clearAllTrims}
+                             onTrim={function (rec) { setTrimErr(''); setTrimRec(rec); }}
+                             onRetry={reloadConversations}
+                             onNext={function () { goTo(4, 1); }} onBack={function () { goTo(2, -1); }} />;
+    } else if (screen === 4) {
+      current = <StepTemplate key="s4" dir={dir} templates={templates} selected={tplSel} detail={tplDetail}
+                              skeleton={skeleton} fmt={fmt} learnName={learnName} learnNote={learnNote}
+                              loading={!tplLoaded} error={tplErr} canGenerate={canGenerate}
+                              onSelect={selectTemplate} onFmt={setFmt} onLearn={learn}
+                              onLearnName={setLearnName}
+                              onGenerate={function () { goTo('gen', 1); }}
+                              onBack={function () { goTo(3, -1); }} />;
+    } else if (screen === 'gen') {
+      current = <Generating key="gen" dir={dir} ids={picked} mode={mode} date={date} start={start}
+                           end={end} fmt={fmt} template={tplSel}
+                           onBack={function () { goTo(4, -1); }} />;
+    }
+
+    return (
+      <React.Fragment>
+        <div className="aurora" aria-hidden="true"
+             style={{ filter: 'hue-rotate(' + tint + 'deg)' }}>
+          <i className="b1"></i><i className="b2"></i><i className="b3"></i>
+        </div>
+
+        <div className="relative z-10">
+          {screen !== 'splash' ? (
+            <TopBar current={stepNum} onJump={jump} onRestart={restart} />
+          ) : null}
+          <main className="min-h-screen px-0 pb-24 pt-28 md:pt-32">
+            <AnimatePresence mode="wait" initial={false} custom={dir}>
+              {current}
+            </AnimatePresence>
+          </main>
+          {screen !== 'splash' ? <Footer /> : null}
+        </div>
+
+        <AnimatePresence>
+          {screen === 'splash' ? (
+            <Splash key={'splash-' + session}
+                    onDone={function (list) { setSources(list); setDir(1); setScreen(1); }} />
+          ) : null}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {trimRec ? (
+            <TrimPanel key="trim" record={trimRec} trims={trims} error={trimErr}
+                       onClose={function () { setTrimRec(null); }}
+                       onSave={function (s, e) { saveTrim(trimRec, s, e); }} />
+          ) : null}
+        </AnimatePresence>
+      </React.Fragment>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+})();
+</script>
+</body>
+</html>

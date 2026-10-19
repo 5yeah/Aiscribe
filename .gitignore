@@ -1,0 +1,36 @@
+# ---- 生成的报告（含个人工作内容，绝不入库）----
+reports/
+
+# ---- 个人配置（含项目名/账号信息，绝不入库）----
+projects.json
+dingtalk_config.json
+automation.json
+
+# ---- 归纳引擎配置（含 API Key，绝不入库）----
+llm.json
+
+# ---- 引导页里的素材时间剪辑（含个人时间线偏好）----
+trims.json
+
+# ---- 学到的格式模板与样例（含个人历史日报，绝不入库）----
+templates/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# ---- 编辑器 ----
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# ---- IDE / 工具产物（分享包、缓存等）----
+.trae-html-share-packages/
+.trae/
+*.zip
