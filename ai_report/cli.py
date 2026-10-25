@@ -170,11 +170,7 @@ def cmd_sources(_args: argparse.Namespace) -> int:
         count = len(conn.read()) if ok else 0
         total += count
         print(f"  - {conn.name:<14} [{state}] 会话数={count}")
-        path = (getattr(conn, "db_path", "")
-                or getattr(conn, "root", "")
-                or getattr(conn, "memory_dir", "")
-                or getattr(conn, "roots", ""))
-        print(f"      路径: {path}")
+        print(f"      路径: {conn.location()}")
     print(f"合计：{total} 条会话（来自 {sum(1 for c in REGISTRY if c.available())} 个可用源）")
     return 0
 

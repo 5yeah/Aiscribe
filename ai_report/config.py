@@ -27,12 +27,27 @@ DINGTALK_CONFIG_EXAMPLE = ROOT_DIR / "dingtalk_config.example.json"
 # ---- 各数据源在“用户目录”下的相对位置（不含用户名，换机靠自动推导）----
 CODEBUDDY_CN_REL = ("CodeBuddy CN", "codebuddy-sessions.vscdb")     # %APPDATA%（+logs/）
 WORKBUDDY_REL = (".workbuddy", "workbuddy.db")                      # 用户主目录
-CASS_REL = ("coding-agent-search", "coding-agent-search", "data", "agent_search.db")  # %APPDATA%
 DOUBAO_REL = ("Doubao", "User Data", "Default", "IndexedDB")        # %LOCALAPPDATA%
 KIMI_REL = ("kimi-desktop",)                                        # %APPDATA%
 TRAE_MEMORY_REL = (".trae-cn", "memory", "projects")                # 用户主目录
 #: TRAE 工作区根目录名（%APPDATA% 下），新版/旧版各一个
 TRAE_ROOT_NAMES = ("Trae CN", "TRAE SOLO CN")
+
+# ---- CLI / 桌面类工具：用户主目录下的点目录 ----
+CODEX_REL = (".codex",)                    # Codex CLI / Codex Desktop
+DSH_REL = (".dsh", "sessions")             # dsh（DeepSeek Harness）
+CLAUDE_CODE_REL = (".claude",)             # Claude Code
+GEMINI_REL = (".gemini",)                  # Gemini CLI
+QWEN_REL = (".qwen",)                      # Qwen Code（Gemini CLI fork）
+IFLOW_REL = (".iflow",)                    # iFlow（Gemini CLI fork）
+
+# ---- VS Code 系编辑器（%APPDATA% 下），内建聊天与插件共用同一套布局 ----
+#: 内建聊天（GitHub Copilot Chat）只出现在 VS Code 本体里；Cursor / Windsurf / Trae
+#: 各有自己的 AI，走各自的连接器，不能混进来
+EDITOR_DIRS = ("Code", "Code - Insiders", "VSCodium")
+#: 插件型代理（Cline / Roo / Kilo）可以在任何 VS Code 分支里安装
+AGENT_EDITOR_DIRS = EDITOR_DIRS + ("Cursor", "Trae CN", "Windsurf")
+CURSOR_DB_REL = ("Cursor", "User", "globalStorage", "state.vscdb")  # %APPDATA%
 
 
 def _home() -> Path:
@@ -83,6 +98,12 @@ def _trae_roots(roaming: List[Path]) -> str:
     return ";".join(str(roaming[0] / n) for n in TRAE_ROOT_NAMES)
 
 
+def _dirs(candidates: List[Path]) -> str:
+    """多目录型数据源（分号分隔）：只收真实存在的目录，一个都没有就返回空串。"""
+    found = [str(p) for p in _dedupe(candidates) if p.is_dir()]
+    return ";".join(found)
+
+
 def default_paths() -> Dict[str, str]:
     """按当前机器自动推导各数据源路径（当前用户优先，其他用户目录兜底）。"""
     homes = _dedupe([_home()] + _other_homes())
@@ -95,11 +116,23 @@ def default_paths() -> Dict[str, str]:
     return {
         "CODEBUDDY_CN_DB": _pick([b.joinpath(*CODEBUDDY_CN_REL) for b in roaming]),
         "WORKBUDDY_DB": _pick([h.joinpath(*WORKBUDDY_REL) for h in homes]),
-        "CASS_DB": _pick([b.joinpath(*CASS_REL) for b in roaming]),
         "DOUBAO_IDB_DIR": _pick([b.joinpath(*DOUBAO_REL) for b in local]),
         "KIMI_DIR": _pick([b.joinpath(*KIMI_REL) for b in roaming]),
         "TRAE_ROOTS": _trae_roots(roaming),
         "TRAE_MEMORY_DIR": _pick([h.joinpath(*TRAE_MEMORY_REL) for h in homes]),
+        # ---- 原生 CLI 类（不依赖任何第三方索引器）----
+        "CODEX_DIR": _pick([h.joinpath(*CODEX_REL) for h in homes]),
+        "DSH_SESSIONS_DIR": _pick([h.joinpath(*DSH_REL) for h in homes]),
+        "CLAUDE_CODE_DIR": _pick([h.joinpath(*CLAUDE_CODE_REL) for h in homes]),
+        "GEMINI_DIR": _pick([h.joinpath(*GEMINI_REL) for h in homes]),
+        "QWEN_CODE_DIR": _pick([h.joinpath(*QWEN_REL) for h in homes]),
+        "IFLOW_DIR": _pick([h.joinpath(*IFLOW_REL) for h in homes]),
+        # ---- 编辑器类（多目录，分号分隔）----
+        "CURSOR_DB": _pick([b.joinpath(*CURSOR_DB_REL) for b in roaming]),
+        "VSCODE_USER_DIRS": _dirs([b / n / "User" for b in roaming for n in EDITOR_DIRS]),
+        "VSCODE_GLOBAL_STORAGE": _dirs(
+            [b / n / "User" / "globalStorage" for b in roaming for n in AGENT_EDITOR_DIRS]
+        ),
     }
 
 
@@ -130,11 +163,19 @@ def describe() -> Dict[str, str]:
     labels = {
         "CODEBUDDY_CN_DB": "CodeBuddy CN 数据库",
         "WORKBUDDY_DB": "WorkBuddy 数据库",
-        "CASS_DB": "Cass 数据库",
         "DOUBAO_IDB_DIR": "豆包 IndexedDB",
         "KIMI_DIR": "Kimi 目录",
         "TRAE_ROOTS": "TRAE 工作区",
         "TRAE_MEMORY_DIR": "TRAE 记忆目录",
+        "CODEX_DIR": "Codex 目录",
+        "DSH_SESSIONS_DIR": "dsh 会话目录",
+        "CLAUDE_CODE_DIR": "Claude Code 目录",
+        "GEMINI_DIR": "Gemini CLI 目录",
+        "QWEN_CODE_DIR": "Qwen Code 目录",
+        "IFLOW_DIR": "iFlow 目录",
+        "CURSOR_DB": "Cursor 数据库",
+        "VSCODE_USER_DIRS": "编辑器用户目录",
+        "VSCODE_GLOBAL_STORAGE": "编辑器 globalStorage",
     }
     for key, label in labels.items():
         source = "环境变量" if os.environ.get(key) else "自动发现"

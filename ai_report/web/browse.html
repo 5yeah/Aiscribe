@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aiscribe · 浏览历史会话</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<!-- 与引导页同源：只依赖 React + Babel（不用 Tailwind / framer-motion，少两个失败点） -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+
+<style>
+/* ============================================================
+   与 index.html 共用同一套 token / 玻璃质感，保证两个页面像同一个产品
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --bg: #EDF3EF;
+  --tint-1: rgba(5, 153, 79, .30);
+  --tint-2: rgba(39, 210, 191, .28);
+  --tint-3: rgba(128, 193, 255, .26);
+  --glass-fill-card: rgba(255, 255, 255, .58);
+  --glass-strong-fill: rgba(255, 255, 255, .74);
+  --text: #16201B;
+  --text-muted: #4A5A52;
+  --border: rgba(22, 32, 27, .12);
+  --brand: #05994F;
+  --brand-on: #FFFFFF;
+  --brand-soft: rgba(5, 153, 79, .10);
+  --brand-ring: rgba(5, 153, 79, .28);
+  --danger: #C0392B;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0A0D0C;
+    --tint-1: rgba(50, 240, 140, .17);
+    --tint-2: rgba(39, 210, 191, .14);
+    --tint-3: rgba(100, 180, 255, .15);
+    --glass-fill-card: rgba(28, 34, 31, .55);
+    --glass-strong-fill: rgba(20, 26, 23, .72);
+    --text: #ECF3EE;
+    --text-muted: #9BAAA2;
+    --border: rgba(255, 255, 255, .14);
+    --brand: #32F08C;
+    --brand-on: #04321C;
+    --brand-soft: rgba(50, 240, 140, .14);
+    --brand-ring: rgba(50, 240, 140, .30);
+    --danger: #FF8A7A;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-family: 'Barlow', 'PingFang SC', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button { cursor: pointer; font: inherit; color: inherit; background: none; border: 0; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.aurora i { position: absolute; display: block; border-radius: 50%; }
+.aurora .b1 { width: 74vmax; height: 74vmax; left: -18vmax; top: -24vmax;
+  background: radial-gradient(circle at 50% 50%, var(--tint-1), transparent 68%); animation: drift1 48s ease-in-out infinite; }
+.aurora .b2 { width: 64vmax; height: 64vmax; right: -16vmax; top: -16vmax;
+  background: radial-gradient(circle at 50% 50%, var(--tint-3), transparent 70%); animation: drift2 56s ease-in-out infinite; }
+.aurora .b3 { width: 82vmax; height: 82vmax; left: 18vmax; bottom: -36vmax;
+  background: radial-gradient(circle at 50% 50%, var(--tint-2), transparent 72%); animation: drift3 64s ease-in-out infinite; }
+@keyframes drift1 { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(3vmax, 4vmax, 0); } }
+@keyframes drift2 { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(-4vmax, 3vmax, 0); } }
+@keyframes drift3 { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(2vmax, -4vmax, 0); } }
+@media (prefers-reduced-motion: reduce) { .aurora i { animation: none; } }
+
+.glass {
+  background: var(--glass-fill-card);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 30px rgba(16, 40, 28, .05);
+}
+.strong { background: var(--glass-strong-fill); backdrop-filter: blur(26px) saturate(150%); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass-fill-card: rgba(255,255,255,.96); --glass-strong-fill: rgba(255,255,255,.97); }
+  @media (prefers-color-scheme: dark) {
+    :root { --glass-fill-card: rgba(26,32,29,.96); --glass-strong-fill: rgba(20,26,23,.97); }
+  }
+}
+
+/* ---------- 顶栏 ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 22px; border-bottom: 1px solid var(--border);
+  background: var(--glass-strong-fill);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+}
+.logo {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; flex: none;
+  background: var(--brand-soft); color: var(--brand);
+  font-family: 'Instrument Serif', Georgia, serif; font-style: italic; font-size: 19px;
+}
+.brandtext { display: flex; flex-direction: column; line-height: 1.15; }
+.brandtext b { font-family: 'Instrument Serif', Georgia, 'Songti SC', serif; font-weight: 400; font-size: 19px; letter-spacing: .01em; }
+.brandtext span { font-size: 11.5px; color: var(--text-muted); letter-spacing: .04em; }
+.topbar .spacer { flex: 1; }
+.btn {
+  border-radius: 999px; padding: 7px 15px; font-size: 13px; line-height: 20px;
+  border: 1px solid var(--border); background: var(--glass-fill-card);
+  color: var(--text-muted); transition: color .15s, border-color .15s, background .15s;
+  display: inline-flex; align-items: center; gap: 7px; text-decoration: none;
+}
+.btn:hover { color: var(--text); border-color: var(--brand-ring); }
+.btn.primary { background: var(--brand); color: var(--brand-on); border-color: transparent; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* ---------- 三栏布局 ---------- */
+.layout {
+  position: relative; z-index: 1;
+  display: grid; grid-template-columns: 296px minmax(0, 1fr);
+  gap: 18px; padding: 18px 22px 40px;
+  max-width: 1560px; margin: 0 auto;
+  align-items: start;
+}
+.layout.has-detail { grid-template-columns: 296px minmax(0, 1fr) minmax(380px, 520px); }
+
+aside.filters { position: sticky; top: 84px; border-radius: 22px; padding: 16px; }
+.filters h3 {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 500; margin: 18px 0 9px;
+}
+.filters h3:first-of-type { margin-top: 14px; }
+.searchbox { position: relative; }
+.searchbox input {
+  width: 100%; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--glass-fill-card); color: var(--text);
+  padding: 10px 34px 10px 13px; font-size: 13.5px; font-family: inherit;
+}
+.searchbox input::placeholder { color: var(--text-muted); }
+.searchbox .kbd {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 11px; color: var(--text-muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 1px 6px; pointer-events: none;
+}
+.facets { display: flex; flex-direction: column; gap: 3px; max-height: 320px; overflow: auto; }
+.facet {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  border-radius: 11px; padding: 7px 9px; font-size: 13px; color: var(--text-muted);
+  transition: background .15s, color .15s;
+}
+.facet:hover { background: var(--brand-soft); color: var(--text); }
+.facet[data-on="1"] { background: var(--brand-soft); color: var(--brand); font-weight: 500; }
+.facet .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .5; flex: none; }
+.facet .lb { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.facet .n { font-variant-numeric: tabular-nums; font-size: 12px; opacity: .8; }
+.dates { display: flex; align-items: center; gap: 7px; }
+.dates input {
+  flex: 1; min-width: 0; border-radius: 11px; border: 1px solid var(--border);
+  background: var(--glass-fill-card); color: var(--text); padding: 7px 9px; font-size: 12.5px; font-family: inherit;
+}
+.reset { width: 100%; justify-content: center; margin-top: 16px; }
+
+/* ---------- 列表 ---------- */
+.listhead { display: flex; align-items: baseline; gap: 10px; padding: 4px 4px 12px; }
+.listhead b { font-size: 15px; font-weight: 500; }
+.listhead span { font-size: 12.5px; color: var(--text-muted); }
+.listhead .spacer { flex: 1; }
+.list { display: flex; flex-direction: column; gap: 9px; }
+.sess {
+  display: block; width: 100%; text-align: left; border-radius: 18px; padding: 14px 16px;
+  border: 1px solid var(--border); background: var(--glass-fill-card);
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.sess:hover { border-color: var(--brand-ring); transform: translateY(-1px); }
+.sess[data-on="1"] { border-color: var(--brand); background: var(--glass-strong-fill); }
+.sess .row1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.sess .ttl { font-size: 14.5px; font-weight: 500; flex: 1 1 260px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill {
+  border-radius: 999px; padding: 2px 9px; font-size: 11px; line-height: 17px;
+  border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap;
+}
+.pill.brand { color: var(--brand); border-color: var(--brand-ring); background: var(--brand-soft); }
+.pill.warn { color: #9A6B10; border-color: rgba(154, 107, 16, .3); background: rgba(154, 107, 16, .08); }
+.sess .sum { margin-top: 7px; font-size: 12.8px; line-height: 1.62; color: var(--text-muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sess .meta { margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: var(--text-muted); }
+.sess .meta .mono { font-variant-numeric: tabular-nums; }
+
+.empty, .loading, .error {
+  border-radius: 20px; padding: 44px 20px; text-align: center;
+  border: 1px dashed var(--border); color: var(--text-muted); font-size: 13.5px;
+}
+.error { color: var(--danger); border-style: solid; }
+.more { display: flex; justify-content: center; padding: 16px 0 8px; }
+
+/* ---------- 详情抽屉 ---------- */
+.detail {
+  position: sticky; top: 84px; border-radius: 22px; overflow: hidden;
+  display: flex; flex-direction: column; max-height: calc(100vh - 106px);
+}
+.detail .head { padding: 16px 18px 13px; border-bottom: 1px solid var(--border); }
+.detail .head h2 { font-family: 'Instrument Serif', Georgia, 'Songti SC', serif; font-weight: 400;
+  font-size: 21px; line-height: 1.3; margin-bottom: 8px; }
+.detail .head .row1 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.detail .head .path { margin-top: 9px; font-size: 11.5px; color: var(--text-muted);
+  word-break: break-all; font-family: ui-monospace, Consolas, monospace; }
+.detail .close { position: absolute; right: 12px; top: 12px; width: 28px; height: 28px;
+  border-radius: 50%; display: grid; place-items: center; color: var(--text-muted);
+  border: 1px solid var(--border); background: var(--glass-fill-card); }
+.detail .close:hover { color: var(--text); }
+.detail .body { overflow: auto; padding: 14px 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.msg { display: flex; gap: 10px; }
+.msg .t { flex: none; width: 40px; font-size: 11px; color: var(--text-muted);
+  font-variant-numeric: tabular-nums; padding-top: 3px; }
+.msg .bubble {
+  flex: 1; min-width: 0; border-radius: 13px; padding: 10px 12px;
+  background: var(--glass-fill-card); border: 1px solid var(--border);
+  font-size: 13px; line-height: 1.68; white-space: pre-wrap; word-break: break-word;
+}
+.msg[data-role="assistant"] .bubble { background: transparent; border-style: dashed; color: var(--text-muted); }
+.detail .note { margin: 0 18px 18px; padding: 12px 14px; border-radius: 14px;
+  background: var(--brand-soft); color: var(--text-muted); font-size: 12.5px; line-height: 1.7; }
+.detail .foot { padding: 11px 18px; border-top: 1px solid var(--border);
+  font-size: 11.5px; color: var(--text-muted); display: flex; gap: 10px; }
+.backdrop { display: none; }
+
+@media (max-width: 1240px) {
+  .layout.has-detail { grid-template-columns: 296px minmax(0, 1fr); }
+  .detail {
+    position: fixed; right: 0; top: 0; bottom: 0; z-index: 40;
+    width: min(560px, 92vw); max-height: none; border-radius: 22px 0 0 22px;
+  }
+  .backdrop { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(8, 18, 12, .28); }
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; padding: 14px; }
+  aside.filters { position: static; }
+  .topbar { padding: 12px 14px; }
+  .brandtext span { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="aurora"><i class="b1"></i><i class="b2"></i><i class="b3"></i></div>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+/* ---------- 小工具 ---------- */
+function api(path) {
+  return fetch(path, { headers: { 'Accept': 'application/json' } }).then(function (r) {
+    return r.json().then(function (data) {
+      if (!r.ok) { throw new Error(data && data.error ? data.error : ('HTTP ' + r.status)); }
+      return data;
+    });
+  });
+}
+
+function fmtNum(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n); }
+
+function esc(qs) {
+  const out = [];
+  Object.keys(qs).forEach(function (k) {
+    const v = qs[k];
+    if (v !== undefined && v !== null && v !== '') {
+      out.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+    }
+  });
+  return out.length ? '?' + out.join('&') : '';
+}
+
+/* 内容等级 -> 颜色语义：能拿到正文的用品牌绿，只有标题/元数据的用警示色 */
+function levelTone(level) {
+  if (!level) { return ''; }
+  if (level.indexOf('原文') > -1 || level.indexOf('正文') > -1) { return 'brand'; }
+  return 'warn';
+}
+
+/* ---------- 左栏：搜索 + 数据源 + 项目 + 日期 ---------- */
+function Filters(props) {
+  const f = props.facets || { sources: [], projects: [] };
+  return (
+    <aside className="filters glass">
+      <div className="searchbox">
+        <input
+          ref={props.searchRef}
+          value={props.q}
+          onChange={function (e) { props.setQ(e.target.value); }}
+          placeholder="搜标题 / 摘要 / 正文…"
+          aria-label="搜索会话"
+        />
+        <span className="kbd">/</span>
+      </div>
+
+      <h3>数据源</h3>
+      <div className="facets">
+        {f.sources.map(function (s) {
+          const on = props.source === s.name;
+          return (
+            <button key={s.name} className="facet" data-on={on ? '1' : '0'}
+              onClick={function () { props.setSource(on ? '' : s.name); }}>
+              <i className="dot"></i>
+              <span className="lb">{s.name}</span>
+              <span className="n">{s.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <h3>项目</h3>
+      <div className="facets">
+        {f.projects.map(function (p) {
+          const on = props.project === p.name;
+          return (
+            <button key={p.name} className="facet" data-on={on ? '1' : '0'}
+              title={p.name}
+              onClick={function () { props.setProject(on ? '' : p.name); }}>
+              <span className="lb">{p.name}</span>
+              <span className="n">{p.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <h3>日期区间</h3>
+      <div className="dates">
+        <input type="date" value={props.start} aria-label="起始日期"
+          onChange={function (e) { props.setStart(e.target.value); }} />
+        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>~</span>
+        <input type="date" value={props.end} aria-label="结束日期"
+          onChange={function (e) { props.setEnd(e.target.value); }} />
+      </div>
+
+      <button className="btn reset" onClick={props.onReset}>清除筛选</button>
+    </aside>
+  );
+}
+
+/* ---------- 会话卡片 ---------- */
+function SessionCard(props) {
+  const s = props.s;
+  return (
+    <button className="sess glass" data-on={props.on ? '1' : '0'} onClick={props.onOpen}>
+      <div className="row1">
+        <span className="ttl" title={s.title}>{s.title || '(无标题会话)'}</span>
+        <span className={'pill ' + levelTone(s.content_level)}>{s.source}</span>
+      </div>
+      <div className="sum">{s.summary || s.title}</div>
+      <div className="meta">
+        <span className="mono">{s.date} {s.time}</span>
+        <span>{s.project}</span>
+        {s.messages
+          ? <span>{s.messages} 条消息</span>
+          : <span>无正文（{s.content_level || '仅元数据'}）</span>}
+      </div>
+    </button>
+  );
+}
+
+/* ---------- 右侧详情 ---------- */
+function Detail(props) {
+  const d = props.data;
+  const ref = useRef(null);
+  useEffect(function () { if (ref.current) { ref.current.scrollTop = 0; } }, [d && d.id]);
+  if (!d) { return null; }
+  const tone = levelTone(d.content_level);
+  return (
+    <aside className="detail glass strong">
+      <button className="close" onClick={props.onClose} aria-label="关闭">×</button>
+      <div className="head">
+        <h2>{d.title || '(无标题会话)'}</h2>
+        <div className="row1">
+          <span className={'pill ' + tone}>{d.source} · {d.content_level}</span>
+          {d.project ? <span className="pill">{d.project}</span> : null}
+          <span className="pill">{d.date} {d.time}</span>
+        </div>
+        {d.cwd ? <div className="path">{d.cwd}</div> : null}
+      </div>
+
+      <div className="body" ref={ref}>
+        {(d.body || []).map(function (m, i) {
+          return (
+            <div className="msg" key={i} data-role={m.role}>
+              <span className="t">{m.time || ''}</span>
+              <div className="bubble">{m.text}</div>
+            </div>
+          );
+        })}
+        {(!d.body || !d.body.length) ? (
+          <div className="empty">这条会话本地只有标题与元数据，没有逐条正文。</div>
+        ) : null}
+      </div>
+
+      {d.note ? <div className="note">{d.note}</div> : null}
+      <div className="foot">
+        <span>{d.id}</span>
+        {d.partial ? <span>· 部分内容</span> : null}
+      </div>
+    </aside>
+  );
+}
+
+/* ---------- 主应用 ---------- */
+function App() {
+  const [q, setQ] = useState('');
+  const [source, setSource] = useState('');
+  const [project, setProject] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+
+  const [data, setData] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState('');
+
+  const searchRef = useRef(null);
+  const reqRef = useRef(0);
+
+  /* 首屏：/ 聚焦搜索，Esc 关详情 */
+  useEffect(function () {
+    function onKey(e) {
+      if (e.key === '/' && document.activeElement !== searchRef.current) {
+        e.preventDefault();
+        searchRef.current && searchRef.current.focus();
+      } else if (e.key === 'Escape') {
+        closeDetail();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return function () { window.removeEventListener('keydown', onKey); };
+  }, []);
+
+  const baseQuery = useMemo(function () {
+    return { q: q.trim(), source: source, project: project, start: start, end: end };
+  }, [q, source, project, start, end]);
+
+  const load = useCallback(function (offset, append) {
+    const seq = ++reqRef.current;
+    if (append) { setMoreLoading(true); } else { setLoading(true); setErr(''); }
+    const qs = esc(Object.assign({}, baseQuery, { offset: offset, limit: 60 }));
+    api('/api/browse' + qs).then(function (res) {
+      if (seq !== reqRef.current) { return; }  // 丢弃过期响应（快速输入时）
+      setData(res);
+      setRows(append ? function (prev) { return prev.concat(res.sessions); } : res.sessions);
+    }).catch(function (e) {
+      if (seq === reqRef.current) { setErr(e.message || String(e)); }
+    }).then(function () {
+      if (seq === reqRef.current) { setLoading(false); setMoreLoading(false); }
+    });
+  }, [baseQuery]);
+
+  /* 搜索输入防抖 250ms；筛选项立即生效 */
+  useEffect(function () {
+    const t = setTimeout(function () { load(0, false); }, q ? 250 : 0);
+    return function () { clearTimeout(t); };
+  }, [load, q]);
+
+  function openSession(s) {
+    setDetailLoading(s.id);
+    if (window.history && history.replaceState) {
+      history.replaceState(null, '', '/browse?id=' + encodeURIComponent(s.id));
+    }
+    api('/api/session?id=' + encodeURIComponent(s.id)).then(function (d) {
+      setDetail(d);
+    }).catch(function (e) {
+      setDetail({ id: s.id, title: s.title, source: s.source, project: s.project,
+                  content_level: s.content_level, date: s.date, time: s.time,
+                  cwd: s.cwd, body: [], note: '读取失败：' + (e.message || e) });
+    }).then(function () { setDetailLoading(''); });
+  }
+
+  function closeDetail() {
+    setDetail(null);
+    if (window.history && history.replaceState) {
+      history.replaceState(null, '', '/browse');
+    }
+  }
+
+  /* 深链接：/browse?id=xxx 直接打开某条会话（方便从别处跳过来） */
+  useEffect(function () {
+    const sp = new URLSearchParams(window.location.search);
+    const id = sp.get('id');
+    if (!id) { return; }
+    api('/api/session?id=' + encodeURIComponent(id)).then(function (d) {
+      setDetail(d);
+    }).catch(function () { /* 链接失效就留在列表页，不打扰 */ });
+  }, []);
+
+  function reset() {
+    setQ(''); setSource(''); setProject(''); setStart(''); setEnd('');
+  }
+
+  function refresh() {
+    const qs = esc(Object.assign({}, baseQuery, { refresh: 1, limit: 60 }));
+    setLoading(true);
+    api('/api/browse' + qs).then(function (res) {
+      setData(res); setRows(res.sessions);
+    }).catch(function (e) { setErr(e.message || String(e)); })
+      .then(function () { setLoading(false); });
+  }
+
+  const total = data ? data.total : 0;
+  const shown = rows.length;
+  const hasMore = data ? shown < total : false;
+
+  return (
+    <React.Fragment>
+      <header className="topbar">
+        <div className="logo">a</div>
+        <div className="brandtext">
+          <b>Aiscribe</b>
+          <span>浏览历史会话</span>
+        </div>
+        <div className="spacer"></div>
+        <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+          {data ? ('本地共 ' + fmtNum(data.facets.total) + ' 条会话') : '读取中…'}
+        </span>
+        <button className="btn" onClick={refresh} disabled={loading}>刷新</button>
+        <a className="btn primary" href="/">生成日报 →</a>
+      </header>
+
+      <div className={'layout' + (detail ? ' has-detail' : '')}>
+        <Filters
+          facets={data && data.facets}
+          q={q} setQ={setQ}
+          source={source} setSource={setSource}
+          project={project} setProject={setProject}
+          start={start} setStart={setStart}
+          end={end} setEnd={setEnd}
+          onReset={reset}
+          searchRef={searchRef}
+        />
+
+        <main>
+          <div className="listhead">
+            <b>{loading ? '读取中…' : (total + ' 条')}</b>
+            <span>
+              {[source, project, (start || end) ? (start || '…') + ' ~ ' + (end || '…') : '',
+                q ? ('“' + q + '”') : ''].filter(Boolean).join(' · ')}
+            </span>
+            <span className="spacer"></span>
+            {data && data.stale_seconds > 0
+              ? <span>{Math.round(data.stale_seconds)} 秒前读取</span> : null}
+          </div>
+
+          {err ? <div className="error">读取失败：{err}</div> : null}
+
+          {!err && loading && !rows.length
+            ? <div className="loading">正在扫描本机数据源…</div> : null}
+
+          {!err && !loading && !rows.length
+            ? <div className="empty">没有匹配的会话。放宽筛选条件，或点「刷新」重读本地文件。</div>
+            : null}
+
+          <div className="list">
+            {rows.map(function (s) {
+              return (
+                <SessionCard key={s.id} s={s}
+                  on={detail && detail.id === s.id}
+                  onOpen={function () { openSession(s); }} />
+              );
+            })}
+          </div>
+
+          {hasMore ? (
+            <div className="more">
+              <button className="btn" disabled={moreLoading}
+                onClick={function () { load(shown, true); }}>
+                {moreLoading ? '加载中…' : ('加载更多（还有 ' + (total - shown) + ' 条）')}
+              </button>
+            </div>
+          ) : null}
+        </main>
+
+        {detail ? <div className="backdrop" onClick={closeDetail}></div> : null}
+        <Detail data={detail} onClose={closeDetail} />
+      </div>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

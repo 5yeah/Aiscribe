@@ -581,12 +581,14 @@ window.addEventListener('load', function () {
   }
 
   function TopBar(props) {
+    var reduced = useReduced();
     var st = useState(false);
     var ask = st[0], setAsk = st[1];
     return (
+      // 走统一的 fadeUp：它显式处理「减少动效」，不会像硬编码 initial 那样停在透明状态
       <motion.header
         className="fixed inset-x-0 top-4 z-40 flex items-center justify-between px-8 lg:px-16"
-        initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: 'easeOut' }}>
+        {...fadeUp(reduced, 0)}>
         <div className="liquid-glass flex h-12 w-12 flex-none items-center justify-center rounded-full">
           <span className="font-heading text-2xl italic c-brand">a</span>
         </div>
@@ -610,7 +612,12 @@ window.addEventListener('load', function () {
           )}
         </div>
 
-        <div className="h-12 w-12 flex-none"></div>
+        <a href="/browse"
+           className="liquid-glass c-muted flex h-12 items-center gap-2 rounded-full px-4 text-xs font-medium hover:c-text"
+           title="按工具 / 项目 / 日期翻看本机全部历史会话（键盘 / 聚焦搜索）">
+          <span className="text-base leading-none">☰</span>
+          <span className="hidden sm:inline">浏览历史会话</span>
+        </a>
       </motion.header>
     );
   }
@@ -720,6 +727,39 @@ window.addEventListener('load', function () {
   // 屏 ①：AI 工具选择（逐源真实扫描，读完才亮）
   // ------------------------------------------------------------
 
+  // 数据源一行。必须定义在 StepSources 之外：定义在里面的话每次渲染都是新函数，
+  // React 会把整行卸载重建，RollNumber 的滚动数字会不停从 0 重来。
+  function SourceRow(props) {
+    var src = props.src;
+    var s = (props.scan || {})[src.name] || {};
+    var state = src.available ? (s.state || 'wait') : 'off';
+    var count = s.count;
+    return (
+      <div className="liquid-glass glass-card flex flex-wrap items-center gap-3 rounded-[1.25rem] px-5 py-4">
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          {state === 'scan' ? (
+            <span className="spin inline-block h-3.5 w-3.5 flex-none rounded-full"
+                  style={{ border: '2px solid var(--brand)', borderTopColor: 'transparent' }}></span>
+          ) : (
+            <Lamp on={state === 'ok'} />
+          )}
+          <span className="c-text truncate text-sm font-medium font-body">{src.name}</span>
+        </span>
+        <span className="c-muted w-[104px] flex-none text-right font-mono text-xs">
+          {state === 'ok' ? <RollNumber value={count || 0} /> : null}
+          {state === 'ok' ? ' 条' : null}
+          {state === 'wait' ? '待扫描' : null}
+          {state === 'scan' ? '扫描中…' : null}
+          {state === 'off' ? '未检测到' : null}
+          {state === 'fail' ? '读取失败' : null}
+        </span>
+        <span className={'tag flex-none' + (src.content_level.indexOf('原文') > -1 || src.content_level.indexOf('正文') > -1 ? ' tag-hi' : '')}>
+          {src.content_level}
+        </span>
+      </div>
+    );
+  }
+
   function StepSources(props) {
     var reduced = useReduced();
     var variants = pageVariants(reduced);
@@ -727,6 +767,24 @@ window.addEventListener('load', function () {
     var scan = props.scan || {};
     var prog = props.progress || { done: 0, total: 0, count: 0 };
     var ready = props.done;
+
+    var stMiss = useState(false);
+    var showMissing = stMiss[0], setShowMissing = stMiss[1];
+
+    // 只列本机真实检测到的工具；没装/没数据的折叠起来，不占版面
+    var present = list.filter(function (s) { return s.available; });
+    var missing = list.filter(function (s) { return !s.available; });
+
+    // 扫描完成后按「读到的会话数」从多到少排；扫描中保持注册顺序，避免行来回跳
+    var ordered = present.slice();
+    if (ready) {
+      ordered.sort(function (a, b) {
+        var ca = (scan[a.name] && scan[a.name].count) || 0;
+        var cb = (scan[b.name] && scan[b.name].count) || 0;
+        if (cb !== ca) { return cb - ca; }
+        return list.indexOf(a) - list.indexOf(b);
+      });
+    }
 
     return (
       <motion.div variants={variants} custom={props.dir} initial="enter" animate="center" exit="exit"
@@ -737,42 +795,46 @@ window.addEventListener('load', function () {
             选择要读的 AI 工具
           </h1>
           <p className="c-muted mt-5 max-w-xl text-sm font-body font-light leading-snug">
-            逐个源在本机真实扫描，读到多少条才写多少——数字来自硬盘里的会话文件，不是估算。
+            只列本机真实检测到的工具，按读到的会话数排序——数字来自硬盘里的会话文件，不是估算。
+            未安装的折叠在下方。
           </p>
         </motion.div>
 
         <motion.div className="mt-9 space-y-3" {...fadeUp(reduced, 0.12)}>
-          {list.map(function (src) {
-            var s = scan[src.name] || {};
-            var state = src.available ? (s.state || 'wait') : 'off';
-            var count = s.count;
-            return (
-              <div key={src.name} className="liquid-glass glass-card flex flex-wrap items-center gap-3 rounded-[1.25rem] px-5 py-4">
-                <span className="flex min-w-0 flex-1 items-center gap-3">
-                  {state === 'scan' ? (
-                    <span className="spin inline-block h-3.5 w-3.5 flex-none rounded-full"
-                          style={{ border: '2px solid var(--brand)', borderTopColor: 'transparent' }}></span>
-                  ) : (
-                    <Lamp on={state === 'ok'} />
-                  )}
-                  <span className="c-text truncate text-sm font-medium font-body">{src.name}</span>
-                </span>
-                <span className="c-muted w-[104px] flex-none text-right font-mono text-xs">
-                  {state === 'ok' ? <RollNumber value={count || 0} /> : null}
-                  {state === 'ok' ? ' 条' : null}
-                  {state === 'wait' ? '待扫描' : null}
-                  {state === 'scan' ? '扫描中…' : null}
-                  {state === 'off' ? '未检测到' : null}
-                  {state === 'fail' ? '读取失败' : null}
-                </span>
-                <span className={'tag flex-none' + (src.content_level.indexOf('原文') > -1 || src.content_level.indexOf('正文') > -1 ? ' tag-hi' : '')}>
-                  {src.content_level}
-                </span>
-              </div>
-            );
+          {ordered.map(function (src) {
+            return <SourceRow key={src.name} src={src} scan={scan} />;
           })}
           {!list.length ? <p className="c-muted text-sm font-body">正在读取本机数据源清单…</p> : null}
+          {list.length && !present.length ? (
+            <div className="liquid-glass glass-card rounded-[1.25rem] px-5 py-8 text-center">
+              <p className="c-muted text-sm font-body">
+                本机没有检测到任何 AI 工具的会话文件。
+              </p>
+              <p className="c-muted mt-2 text-xs font-body">
+                用过的工具会把会话存在固定目录（见 README「支持的数据源」），没装就暂时读不到。
+              </p>
+            </div>
+          ) : null}
         </motion.div>
+
+        {missing.length ? (
+          <motion.div className="mt-4" {...fadeUp(reduced, 0.16)}>
+            <button type="button"
+                    className="c-muted flex items-center gap-2 rounded-full px-1 py-1.5 text-xs font-body hover:c-text"
+                    onClick={function () { setShowMissing(!showMissing); }}>
+              <span className="inline-block w-3 text-center">{showMissing ? '▾' : '▸'}</span>
+              <span>{missing.length} 个工具未检测到</span>
+              <span className="opacity-70">（本机没装或还没产生会话，不影响报告）</span>
+            </button>
+            {showMissing ? (
+              <motion.div className="mt-3 space-y-2" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                {missing.map(function (src) {
+                  return <SourceRow key={src.name} src={src} scan={scan} />;
+                })}
+              </motion.div>
+            ) : null}
+          </motion.div>
+        ) : null}
 
         <motion.div {...fadeUp(reduced, 0.2)}>
           <StepFooter

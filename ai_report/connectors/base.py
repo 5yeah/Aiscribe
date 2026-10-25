@@ -34,3 +34,12 @@ class BaseConnector(ABC):
 
     def __repr__(self) -> str:  # pragma: no cover - 调试用
         return f"<{type(self).__name__} name={self.name!r} available={self.available()}>"
+
+    def location(self) -> str:
+        """数据源的展示路径（`aireport sources` 用）；多目录型数据源请覆盖。"""
+        for attr in ("db_path", "root", "memory_dir"):
+            value = getattr(self, attr, "")
+            text = str(value) if value else ""
+            if text:
+                return text
+        return ""

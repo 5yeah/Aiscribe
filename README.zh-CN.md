@@ -23,7 +23,7 @@ Aiscribe 的做法是：
 
 ## 特性
 
-- **多源聚合**：内置 6 个连接器 —— CodeBuddy CN、TRAE、豆包、WorkBuddy、Kimi、Cass，可继续扩展
+- **多源聚合**：内置 **16 个原生连接器** —— CodeBuddy CN、TRAE、Codex、dsh、Claude Code、Gemini CLI、Qwen Code、iFlow、Copilot Chat、Cline、Roo Code、Kilo Code、Cursor、豆包、WorkBuddy、Kimi；全部直接读本地文件，**不需要装 Cass 或者任何索引器**
 - **会理解，不是套模板**：`get_conversations` 返回按项目分组的**逐条真实输入**，归纳由客户端 AI 完成
 - **时间不串味**：只收“当天开始”或“跨夜不超过 1 天”的会话，一周前只被碰过一次的旧会话不会混进今天
 - **项目自动归类**：关键词规则（`projects.json`）→ 标题关键词 → **cwd 路径末段目录名兜底**，新项目不用改配置
@@ -70,7 +70,7 @@ python -m ai_report ui --port 5080 --no-open
 
 页面只监听 `127.0.0.1`，四步走：
 
-1. **数据源雷达** — 逐个真实扫描本机 AI 工具，读完才亮，并标注每个源的内容等级（逐条原文 / 仅标题 / 元数据）
+1. **数据源雷达** — 只列本机**真实检测到**的工具，逐个扫描、读完才亮，并标注每个源的内容等级（逐条原文 / 仅标题 / 元数据）；扫描完成后按**读到的会话数从多到少排序**，没装的工具折叠在「N 个工具未检测到」里，点一下才展开
 2. **时间窗** — 日报（选一天）/ 周报（选一天取自然周）/ 自定义时间（显式起止日期）
 3. **素材勾选** — 按项目泳道排列当天会话，默认全选；**取消勾选的内容不会进素材，AI 就不会写进报告**；一条会话还能用 ✂ 裁到指定时间段
 4. **模板与输出** — 选 md / docx / html；**「格式克隆」**里上传你以前的日报（md / txt / docx / 图片），本机解析出排版结构存成模板，右侧骨架立刻变成你的格式
@@ -83,6 +83,18 @@ python -m ai_report ui --port 5080 --no-open
   **未配置归纳引擎时不会假装归纳**，而是如实退回草稿并说明原因
 - **复制指令** — 把带 `ids` 与格式规范的指令贴进你的 AI 对话，由 AI 读原文归纳，**质量最高**；
   这种情况下的落盘由你的 AI 客户端调用 `save_report` 完成
+
+### 浏览历史会话（另一个页面）
+
+引导页只展示「你选的那一天」的素材。想翻**全部历史会话**，点右上角的
+**「浏览历史会话」**，或直接打开 `http://127.0.0.1:5071/browse`：
+
+- 左栏按**数据源**（含各自真实条数）和**项目**筛选，日期区间可任选
+- 顶部搜索框同时搜**标题、摘要和逐条正文**（按 `/` 聚焦，`Esc` 关详情）
+- 点任意一条，右侧抽屉展示该会话的**逐条正文 + 时间 + 项目路径**；
+  只有标题/元数据的源（如 WorkBuddy、豆包）会明确标注「无正文」，不会让你误以为丢了数据
+- 支持深链接：`/browse?id=dsh|session-xxxx` 直接打开某条会话
+- 列表读取有 30 秒缓存（翻页、搜索不用反复扫硬盘），点「刷新」强制重读
 
 ### 归纳引擎（可选，不配也能用）
 
@@ -152,10 +164,11 @@ AI 会自动走完 **`list_sources` → `get_conversations`（摸底 + 逐项目
 ```mermaid
 flowchart LR
     subgraph L1["L1 连接器层（只读本地文件，不联网）"]
-        A1[CodeBuddy CN] --> U[UnifiedRecord]
-        A2[TRAE] --> U
-        A3[豆包] --> U
-        A4[WorkBuddy / Kimi / Cass] --> U
+        A1[CodeBuddy CN / TRAE] --> U[UnifiedRecord]
+        A2[Codex / dsh / Claude Code] --> U
+        A3[Gemini CLI / Qwen Code / iFlow] --> U
+        A4[Copilot Chat / Cline / Roo / Kilo / Cursor] --> U
+        A5[豆包 / WorkBuddy / Kimi] --> U
     end
     U --> L2["L2 统一索引：合并 / 去重 / 项目分类 / 按北京时间过滤"]
     L2 --> MCP["MCP 工具：get_conversations 返回原始对话"]
@@ -240,17 +253,44 @@ Windows 一键脚本：[`scripts/run_daily.bat`](scripts/run_daily.bat) / [`scri
 
 ## 支持的数据源
 
+全部连接器都是**原生实现**——直接读各家工具自己的本地文件，不需要安装 Cass 之类的索引器，也不需要额外装包。
+唯一的例外是 zstd 压缩的会话（Codex、dsh）：装了 `zstandard` 或系统有 `zstd` 命令就能读到正文，否则自动退化为只读元数据，**不会报错、不会崩**。
+
+### 有逐条正文（报告质量最高）
+
 | 数据源 | 本地位置（自动发现） | 本地能拿到什么 |
 |---|---|---|
-| CodeBuddy CN | `%APPDATA%/CodeBuddy CN/` | 会话元数据 + **logs 里 `onAgentStart: userInput=` 可还原当天逐条真实输入**（逐条原文） |
-| TRAE | `~/.trae-cn/memory/projects/` | 逐条 message 级摘要 + `topics.md` 会话级摘要（本地最全，逐条原文） |
-| 豆包 | `%LOCALAPPDATA%/Doubao/User Data/Default/IndexedDB` | 会话标题与时间（LevelDB / V8 序列化 blob，仅标题） |
-| WorkBuddy | `~/.workbuddy/workbuddy.db` | 会话标题与时间（正文在云端，仅标题） |
+| CodeBuddy CN | `%APPDATA%/CodeBuddy CN/` | 会话元数据 + **logs 里 `onAgentStart: userInput=` 还原当天逐条真实输入** |
+| TRAE | `~/.trae-cn/memory/projects/` | 逐条 message 级摘要 + `topics.md` 会话级摘要 |
+| Codex | `~/.codex/` | `state_5.sqlite` 元数据 + 投影历史 / `rollout-*.jsonl.zst`（zstd）逐条正文 |
+| dsh | `~/.dsh/sessions/` | `session.v4.jsonl.zstd` 事件流里的逐条真人输入（多 zstd 帧，流式解压） |
+| Claude Code | `~/.claude/projects/` | `**/*.jsonl` 逐条 user / assistant（自动跳过子代理对话与本地命令噪音） |
+| Gemini CLI | `~/.gemini/tmp/*/chats/` | `session-*.json` 逐条消息 |
+| Qwen Code | `~/.qwen/tmp/*/chats/` | 同上（Gemini CLI 分支，格式一致） |
+| iFlow | `~/.iflow/tmp/*/chats/` | 同上（Gemini CLI 分支，格式一致） |
+| Copilot Chat | `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/` | VS Code 内建聊天 `*.jsonl` + `chat.ChatSessionStore.index` |
+| Cline | `…/globalStorage/saoudrizwan.claude-dev/tasks/` | `api_conversation_history.json` 逐条消息 |
+| Roo Code | `…/globalStorage/rooveterinaryinc.roo-cline/tasks/` | 同上（同源插件，格式一致） |
+| Kilo Code | `…/globalStorage/kilocode.kilo-code/tasks/` | 同上（同源插件，格式一致） |
+| Cursor | `%APPDATA%/Cursor/User/globalStorage/state.vscdb` | `cursorDiskKV` 的 `composerData:*` + `bubbleId:*` |
+
+### 只有标题 / 元数据（正文在云端）
+
+| 数据源 | 本地位置（自动发现） | 本地能拿到什么 |
+|---|---|---|
+| 豆包 | `%LOCALAPPDATA%/Doubao/User Data/Default/IndexedDB` | 会话标题与时间（LevelDB / V8 序列化 blob） |
+| WorkBuddy | `~/.workbuddy/workbuddy.db` | 会话标题与时间（cwd 是它自己的工作区目录，分类靠标题） |
 | Kimi | `%APPDATA%/kimi-desktop/` | 元数据 + 被编辑文件路径（据此定位项目目录） |
-| Cass | `%APPDATA%/coding-agent-search/` | 会话 + 首条 user 消息（含正文，首条正文） |
 
 所有路径都基于 `%APPDATA%` / `%LOCALAPPDATA%` / 用户主目录**自动推导**，同一台机器多用户时还会兜底搜索其他用户目录；
 每个路径都能用环境变量覆盖（见 `python -m ai_report config` 的输出）。
+装了哪个源就自动亮哪个，没装的显示 `missing`，不影响其它源。
+
+### 想接一个还没支持的工具？
+
+见 [`docs/数据源适配.md`](docs/数据源适配.md)：实现 `available()` / `read()` 两个方法，
+把结果归一到 `UnifiedRecord`，再往 `REGISTRY` 追一行即可。`connectors/common.py` 已备好
+zstd 解压、JSONL 读取、ISO 时间解析、正文块抽取、注入上下文过滤等通用工具。
 
 ## 配置
 
@@ -261,7 +301,7 @@ Windows 一键脚本：[`scripts/run_daily.bat`](scripts/run_daily.bat) / [`scri
 | `AIREREPORT_TEMPLATE` | 默认生效的格式模板名 | 不设则用最新学到的模板 |
 | `AIREREPORT_TRIMS` | 引导页时间剪辑文件 | 默认 `<仓库>/trims.json` |
 | `AIREREPORT_PROJECTS` | 项目分类规则文件 | 依次找 `<仓库>/projects.json`、`~/.aireport/projects.json`，都没有则用内置规则 + cwd 兜底 |
-| `CODEBUDDY_CN_DB` `WORKBUDDY_DB` `CASS_DB` `DOUBAO_IDB_DIR` `KIMI_DIR` `TRAE_ROOTS` `TRAE_MEMORY_DIR` | 覆盖数据源路径 | 用自动发现的默认路径 |
+| `CODEBUDDY_CN_DB` `WORKBUDDY_DB` `DOUBAO_IDB_DIR` `KIMI_DIR` `TRAE_ROOTS` `TRAE_MEMORY_DIR` `CODEX_DIR` `DSH_SESSIONS_DIR` `CLAUDE_CODE_DIR` `GEMINI_DIR` `QWEN_CODE_DIR` `IFLOW_DIR` `CURSOR_DB` `VSCODE_USER_DIRS` `VSCODE_GLOBAL_STORAGE` | 覆盖数据源路径（多目录型用 `;` 分隔） | 用自动发现的默认路径 |
 | `DEEPSEEK_API_KEY` / `LLM_PROVIDER` | LLM 润色（可选） | `--llm` 自动退回模板模式 |
 
 项目分类想固定叫法时，复制 [`projects.example.json`](projects.example.json) 为 `projects.json` 再改
@@ -278,7 +318,8 @@ Windows 一键脚本：[`scripts/run_daily.bat`](scripts/run_daily.bat) / [`scri
 
 ```
 ai_report/            核心包（运行时仅标准库）
-  connectors/         L1：base / codebuddy_cn / trae / doubao / workbuddy / kimi / cass / registry
+  connectors/         L1：base / common / codebuddy_cn / trae / codex / dsh / claude_code /
+                      gemini_cli / vscode_chat / cline / cursor / doubao / workbuddy / kimi / registry
   index.py            L2：合并去重 / 分类 / 按日期过滤 / 窗口与素材负载（MCP 与引导页共用）
   generator.py        L3：日报/周报/区间模板渲染（可用学到的模板样式排版）
   template.py         格式克隆：从旧日报样例抽排版结构 → 模板存取 + 给 AI 的格式规范

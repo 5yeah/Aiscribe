@@ -4,6 +4,12 @@
 > 适用环境：Windows；AI 运行在**你本机**。路径一律用 `%APPDATA%` / `%LOCALAPPDATA%` / 用户主目录占位，换机不用改。
 > 设计原则：**本地优先 + 隐私优先 + 零三方依赖（仅 Python 标准库）**。
 
+> **历史文档说明**：本文是项目最初的构建提示词，保留原貌以便追溯。
+> 其中 Prompt 1.4 的 Cass 读取器**已被移除**——现在 Codex / Copilot 等都由
+> `connectors/codex.py`、`connectors/vscode_chat.py` 等原生实现直接读取，
+> 不再需要安装 coding-agent-search。当前支持的数据源见
+> [`README.zh-CN.md`](../README.zh-CN.md#支持的数据源) 与 [`数据源适配.md`](数据源适配.md)。
+
 ---
 
 ## 〇、总纲提示词（第一条发送，建立全局上下文）

@@ -28,7 +28,7 @@ Aiscribe does it differently:
 
 ## Features
 
-- **6 built-in connectors** — CodeBuddy CN, TRAE, Doubao, WorkBuddy, Kimi, Cass; easy to extend
+- **16 built-in native connectors** — CodeBuddy CN, TRAE, Codex, dsh, Claude Code, Gemini CLI, Qwen Code, iFlow, Copilot Chat, Cline, Roo Code, Kilo Code, Cursor, Doubao, WorkBuddy, Kimi; each reads the tool's own local files, **no Cass or other indexer required**
 - **Understands, doesn't template** — `get_conversations` returns per-project raw user inputs; the client AI writes the report
 - **Correct date filtering** — only sessions starting that day, or spanning the night (≤ 1 day); a week-old session touched once won't leak into today
 - **Automatic project grouping** — keyword rules (`projects.json`) → title hints → **cwd's last path segment** fallback; new projects need zero config
@@ -76,8 +76,10 @@ python -m ai_report ui            # port 5071, opens your browser
 python -m ai_report ui --port 5080 --no-open
 ```
 
-Bound to `127.0.0.1` only. Four steps: **source scan** (each source lights up only after it is really
-read, tagged with its content level), **time window** (daily / the natural week of a chosen day / an
+Bound to `127.0.0.1` only. Four steps: **source scan** (lists only the tools really detected on this
+machine — each lights up after it is really read, tagged with its content level; once scanning finishes
+the list is sorted by session count, and tools that are not installed are folded into a collapsed
+“N tools not detected” row), **time window** (daily / the natural week of a chosen day / an
 explicit custom range), **session picking** (lanes per project, all selected by default — anything you
 untick never reaches the AI; each session can also be cut to a time window with ✂), **template & output**
 (md / docx / html, plus format cloning from your old reports).
@@ -92,6 +94,18 @@ The generating screen offers two ways out, pick either:
 - **Copy instruction** — paste the generated instruction (carrying the record ids you selected and the
   format spec) into your AI chat; the AI reads the raw sessions and summarises, which gives **the best
   quality**. In that path the file is written by your AI client via `save_report`.
+
+### Browsing every past session
+
+The wizard only shows the material for the day you picked. To browse **all** history, hit
+**“浏览历史会话”** in the top-right corner, or open `http://127.0.0.1:5071/browse` directly:
+
+- filter by **source** (with real per-source counts) and by **project**; pick any date range
+- the search box covers **titles, summaries and per-message text** (`/` to focus, `Esc` to close)
+- click a row for a right-hand drawer with the **full per-message body, timestamps and project path**;
+  sources that only keep titles (WorkBuddy, Doubao…) are labelled “no body” instead of looking empty
+- deep links work: `/browse?id=dsh|session-xxxx`
+- listing is cached for 30 s so paging/searching never re-scans the disk; **Refresh** forces a re-read
 
 ### Summarisation engine (optional)
 
@@ -166,10 +180,11 @@ Client-by-client setup and known pitfalls (including TRAE's space-splitting `com
 ```mermaid
 flowchart LR
     subgraph L1["L1 Connectors (local files only, offline)"]
-        A1[CodeBuddy CN] --> U[UnifiedRecord]
-        A2[TRAE] --> U
-        A3[Doubao] --> U
-        A4[WorkBuddy / Kimi / Cass] --> U
+        A1[CodeBuddy CN / TRAE] --> U[UnifiedRecord]
+        A2[Codex / dsh / Claude Code] --> U
+        A3[Gemini CLI / Qwen Code / iFlow] --> U
+        A4[Copilot Chat / Cline / Roo / Kilo / Cursor] --> U
+        A5[Doubao / WorkBuddy / Kimi] --> U
     end
     U --> L2["L2 Index: merge / dedupe / classify / date filter"]
     L2 --> MCP["MCP: get_conversations returns raw chats"]
@@ -228,14 +243,35 @@ scheduling example: [`automation_example.json`](automation_example.json).
 
 ## Supported sources
 
+All connectors are native: they read each tool's own local files, so no Cass-style indexer and no extra packages are needed.
+The only exception is zstd-compressed sessions (Codex, dsh): with `zstandard` installed or a `zstd` binary on PATH you get the
+full text; without either they degrade to metadata-only — never an error, never a crash.
+
+### Full per-message text (best report quality)
+
 | Source | Auto-discovered location | What is available locally |
 |---|---|---|
 | CodeBuddy CN | `%APPDATA%/CodeBuddy CN/` | Session metadata + **raw sent inputs via `onAgentStart: userInput=` in logs** |
-| TRAE | `~/.trae-cn/memory/projects/` | Per-message summaries + `topics.md` session summaries (richest) |
+| TRAE | `~/.trae-cn/memory/projects/` | Per-message summaries + `topics.md` session summaries |
+| Codex | `~/.codex/` | `state_5.sqlite` metadata + projected history / `rollout-*.jsonl.zst` messages |
+| dsh | `~/.dsh/sessions/` | Per-message real user inputs from the `session.v4.jsonl.zstd` event stream |
+| Claude Code | `~/.claude/projects/` | `**/*.jsonl` user/assistant turns (sidechains and local-command noise skipped) |
+| Gemini CLI | `~/.gemini/tmp/*/chats/` | `session-*.json` messages |
+| Qwen Code | `~/.qwen/tmp/*/chats/` | Same format (Gemini CLI fork) |
+| iFlow | `~/.iflow/tmp/*/chats/` | Same format (Gemini CLI fork) |
+| Copilot Chat | `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/` | VS Code built-in chat `*.jsonl` + `chat.ChatSessionStore.index` |
+| Cline | `…/globalStorage/saoudrizwan.claude-dev/tasks/` | `api_conversation_history.json` messages |
+| Roo Code | `…/globalStorage/rooveterinaryinc.roo-cline/tasks/` | Same format (same lineage) |
+| Kilo Code | `…/globalStorage/kilocode.kilo-code/tasks/` | Same format (same lineage) |
+| Cursor | `%APPDATA%/Cursor/User/globalStorage/state.vscdb` | `cursorDiskKV` `composerData:*` + `bubbleId:*` |
+
+### Titles / metadata only (bodies live in the cloud)
+
+| Source | Auto-discovered location | What is available locally |
+|---|---|---|
 | Doubao | `%LOCALAPPDATA%/Doubao/User Data/Default/IndexedDB` | Titles and timestamps (LevelDB / V8 blobs) |
-| WorkBuddy | `~/.workbuddy/workbuddy.db` | Titles and timestamps (bodies stay in the cloud) |
+| WorkBuddy | `~/.workbuddy/workbuddy.db` | Titles and timestamps (cwd is its own workspace dir) |
 | Kimi | `%APPDATA%/kimi-desktop/` | Metadata + edited file paths (used to locate the project dir) |
-| Cass | `%APPDATA%/coding-agent-search/` | Sessions + first user message |
 
 Every path is derived from `%APPDATA%` / `%LOCALAPPDATA%` / the user profile — no hard-coded usernames —
 and each can be overridden by an environment variable (see `python -m ai_report config`).
@@ -249,7 +285,7 @@ and each can be overridden by an environment variable (see `python -m ai_report 
 | `AIREREPORT_TEMPLATE` | Default active format template | newest learned template |
 | `AIREREPORT_TRIMS` | Session time-trim file | `<repo>/trims.json` |
 | `AIREREPORT_PROJECTS` | Project classification rules | `<repo>/projects.json`, then `~/.aireport/projects.json`, then built-ins + cwd fallback |
-| `CODEBUDDY_CN_DB` etc. | Override a source path | Auto-discovered |
+| `CODEBUDDY_CN_DB` … `VSCODE_GLOBAL_STORAGE` | Override a source path (multi-dir values use `;`) | Auto-discovered |
 | `DEEPSEEK_API_KEY`, `LLM_PROVIDER` | Optional LLM polish | `--llm` falls back to template mode |
 
 Copy [`projects.example.json`](projects.example.json) to `projects.json` to pin your own project names.
@@ -266,7 +302,8 @@ Copy [`projects.example.json`](projects.example.json) to `projects.json` to pin 
 
 ```
 ai_report/            core package (stdlib only)
-  connectors/         L1: base / codebuddy_cn / trae / doubao / workbuddy / kimi / cass / registry
+  connectors/         L1: base / common / codebuddy_cn / trae / codex / dsh / claude_code /
+                      gemini_cli / vscode_chat / cline / cursor / doubao / workbuddy / kimi / registry
   index.py            L2: merge, dedupe, classify, date filter, shared window/payload helpers
   generator.py        L3: daily/weekly/range templates (can follow a learned layout)
   template.py         format cloning: extract layout from past reports, store specs for the AI

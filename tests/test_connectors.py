@@ -7,7 +7,6 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from ai_report.connectors.cass import CassConnector
 from ai_report.connectors.codebuddy_cn import CodeBuddyCNConnector
 from ai_report.connectors.trae import TraeConnector
 from ai_report.connectors.workbuddy import WorkBuddyConnector
@@ -88,44 +87,6 @@ class TestWorkBuddy(unittest.TestCase):
         self.assertEqual(recs[0].source, "WorkBuddy")
         self.assertEqual(recs[0].cwd, "2026-10-09-09-02-18")
         self.assertEqual(recs[0].start_ts, TS_MS / 1000)
-
-
-class TestCass(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.db = str(Path(self.tmp.name) / "agent_search.db")
-        conn = sqlite3.connect(self.db)
-        conn.execute("CREATE TABLE conversations (id TEXT, title TEXT,"
-                     " created_at INTEGER, updated_at INTEGER, workspace_id TEXT)")
-        conn.execute("CREATE TABLE messages (id INTEGER, conversation_id TEXT,"
-                     " role TEXT, content TEXT, created_at INTEGER)")
-        conn.execute("CREATE TABLE workspaces (id TEXT, name TEXT, path TEXT)")
-        conn.execute("INSERT INTO workspaces VALUES ('w1','ws','f:/work/terminal-detect')")
-        rows = [
-            ("c1", "端子检测联调", TS_MS, TS_MS, "w1"),
-            ("c2", "<external_codex_apps_open_page>", TS_MS, TS_MS, "w1"),
-            ("c3", "正常会话", TS_MS, TS_MS, "w1"),
-        ]
-        conn.executemany("INSERT INTO conversations VALUES (?,?,?,?,?)", rows)
-        conn.execute("INSERT INTO messages VALUES (1,'c1','user','帮我调端子检测参数',?)",
-                     (TS_MS,))
-        conn.execute("INSERT INTO messages VALUES (2,'c1','assistant','好的',?)",
-                     (TS_MS + 1000,))
-        conn.commit()
-        conn.close()
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def test_read_filters_system_events(self):
-        c = CassConnector(db_path=self.db)
-        recs = c.read()
-        self.assertEqual(len(recs), 2)  # "<" 开头的系统事件被过滤
-        c1 = next(r for r in recs if r.session_id == "c1")
-        self.assertEqual(c1.cwd, "f:/work/terminal-detect")
-        # summary 取首条 user 消息
-        self.assertEqual(c1.summary, "帮我调端子检测参数")
-        self.assertNotIn("<", c1.title)
 
 
 class TestTraeMemory(unittest.TestCase):

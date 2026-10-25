@@ -13,7 +13,7 @@ class UnifiedRecord:
     时间戳统一为 epoch 秒（float），展示时转北京时间（UTC+8）。
     """
 
-    source: str            # "CodeBuddy CN" / "WorkBuddy" / "Cass"
+    source: str            # 连接器显示名，如 "CodeBuddy CN" / "Codex" / "dsh"
     session_id: str
     title: str
     project: str = ""      # 分类后的项目名，空串表示未分类（由 L2 填充）

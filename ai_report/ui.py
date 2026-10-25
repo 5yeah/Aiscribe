@@ -6,8 +6,11 @@
 
 路由：
   GET  /                    引导页（ai_report/web/index.html）
+  GET  /browse              历史会话浏览页（ai_report/web/browse.html）
   GET  /api/sources         源清单（名称 / 内容等级 / 是否可用），不读数据，很快
   GET  /api/source?name=X   单个源的真实扫描结果（可用性 + 会话数），供逐源点亮
+  GET  /api/browse          全部历史会话：筛选（source/project/q/start/end）+ 分页 + 左栏计数
+  GET  /api/session?id=X    单条会话详情（含 raw["messages"] 逐条正文）
   GET  /api/conversations   按项目分组的素材（含稳定 id），供卡片墙勾选
   GET  /api/templates       已学格式模板清单（供“格式克隆”下拉）
   GET  /api/template?name=X 单个模板的规范文本 + 图片提示（供预览）
@@ -29,6 +32,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 import webbrowser
 from datetime import timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,12 +44,162 @@ from ai_report import cli, config, generator, index, llm, template
 from ai_report import trim as trimmer
 from ai_report.connectors.registry import REGISTRY
 from ai_report.template import image_hint
-from ai_report.utils import log
+from ai_report.utils import fmt_bj, log
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 INDEX_HTML = WEB_DIR / "index.html"
+BROWSE_HTML = WEB_DIR / "browse.html"
 
 DEFAULT_PORT = 5071
+
+#: 浏览接口的进程内缓存：全量读取一次约 0.5~1 秒，翻页/搜索不该每次都重读
+_BROWSE_CACHE: Dict[str, Any] = {"ts": 0.0, "records": []}
+_BROWSE_TTL = 30.0
+_BROWSE_PAGE = 60
+
+
+def _content_levels() -> Dict[str, str]:
+    """数据源名 -> 内容等级（浏览页用来标注「这条能拿到多少正文」）。"""
+    return {c.name: c.content_level for c in REGISTRY}
+
+
+def browse_records(refresh: bool = False) -> List[index.UnifiedRecord]:
+    """全量会话（带 30 秒缓存）；refresh=True 强制重读本地文件。"""
+    fresh = time.time() - _BROWSE_CACHE["ts"] < _BROWSE_TTL and _BROWSE_CACHE["records"]
+    if refresh or not fresh:
+        _BROWSE_CACHE["records"] = index.collect()
+        _BROWSE_CACHE["ts"] = time.time()
+    return _BROWSE_CACHE["records"]
+
+
+def _message_list(rec: "index.UnifiedRecord") -> List[Dict[str, Any]]:
+    """取原始逐条消息；兼容各家 raw 结构差异（有的只给 summary）。"""
+    raw = rec.raw if isinstance(rec.raw, dict) else {}
+    msgs = raw.get("messages")
+    if not isinstance(msgs, list):
+        return []
+    out = []
+    for m in msgs:
+        if not isinstance(m, dict):
+            continue
+        text = str(m.get("text") or "").strip()
+        if not text:
+            continue
+        out.append({
+            "ts": float(m.get("ts") or 0.0),
+            "time": fmt_bj(m.get("ts") or 0, "%H:%M") if m.get("ts") else "",
+            "role": str(m.get("role") or "user"),
+            "text": text,
+        })
+    return out
+
+
+def _session_row(rec: "index.UnifiedRecord") -> Dict[str, Any]:
+    """浏览列表里的一行（不含正文，翻页轻量）。"""
+    msgs = _message_list(rec)
+    return {
+        "id": index.record_id(rec),
+        "source": rec.source,
+        "content_level": _content_levels().get(rec.source, ""),
+        "project": rec.project or index.UNCATEGORIZED,
+        "title": rec.title,
+        "status": rec.status,
+        "cwd": rec.cwd,
+        "start_ts": rec.start_ts,
+        "end_ts": rec.end_ts,
+        "date": fmt_bj(rec.start_ts, "%Y-%m-%d") if rec.start_ts else "",
+        "time": (f"{fmt_bj(rec.start_ts, '%H:%M')}~{fmt_bj(rec.end_ts, '%H:%M')}"
+                 if rec.start_ts else ""),
+        "summary": rec.summary,
+        "messages": len(msgs),
+        "has_body": bool(msgs),
+    }
+
+
+def _facets(records: List["index.UnifiedRecord"]) -> Dict[str, Any]:
+    """左栏筛选项：源 / 项目 / 全量时间范围。"""
+    sources: Dict[str, int] = {}
+    projects: Dict[str, int] = {}
+    for rec in records:
+        sources[rec.source] = sources.get(rec.source, 0) + 1
+        name = rec.project or index.UNCATEGORIZED
+        projects[name] = projects.get(name, 0) + 1
+    stamps = [r.start_ts for r in records if r.start_ts]
+    return {
+        "sources": [{"name": k, "count": v}
+                    for k, v in sorted(sources.items(), key=lambda kv: -kv[1])],
+        "projects": [{"name": k, "count": v}
+                     for k, v in sorted(projects.items(), key=lambda kv: -kv[1])],
+        "total": len(records),
+        "first": min(stamps) if stamps else 0.0,
+        "last": max(stamps) if stamps else 0.0,
+    }
+
+
+def browse(source: Optional[str] = None, project: Optional[str] = None,
+           q: Optional[str] = None, start_value: Optional[str] = None,
+           end_value: Optional[str] = None, limit: int = _BROWSE_PAGE,
+           offset: int = 0, refresh: bool = False) -> Dict[str, Any]:
+    """浏览历史会话：筛选 + 分页 + 左栏计数，按时间倒序（最近的在前）。"""
+    records = browse_records(refresh)
+    facets = _facets(records)
+
+    rows = list(records)
+    if source:
+        rows = [r for r in rows if r.source == source]
+    if project:
+        rows = [r for r in rows if (r.project or index.UNCATEGORIZED) == project]
+    if start_value or end_value:
+        rows = index.filter_by_date(
+            rows,
+            start=index.parse_day(start_value) if start_value else None,
+            end=index.parse_day(end_value) if end_value else None,
+        )
+    needle = (q or "").strip().lower()
+    if needle:
+        def hit(rec: "index.UnifiedRecord") -> bool:
+            hay = [rec.title, rec.summary, rec.cwd, rec.project or ""]
+            hay += [m["text"] for m in _message_list(rec)]
+            return any(needle in str(x).lower() for x in hay)
+        rows = [r for r in rows if hit(r)]
+
+    rows.sort(key=lambda r: (r.start_ts or 0, r.end_ts or 0), reverse=True)
+    total = len(rows)
+    limit = max(1, min(int(limit or _BROWSE_PAGE), 500))
+    offset = max(0, int(offset or 0))
+    page = rows[offset:offset + limit]
+
+    # 状态标记：是否来自缓存，便于排查「为什么数字没变」
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "facets": facets,
+        "stale_seconds": round(time.time() - _BROWSE_CACHE["ts"], 1),
+        "sessions": [_session_row(r) for r in page],
+    }
+
+
+def session_detail(record: str) -> Dict[str, Any]:
+    """单条会话详情：元数据 + 逐条正文（没有正文的源如实说明）。"""
+    rid = (record or "").strip()
+    if not rid:
+        raise ValueError("id 不能为空")
+    for rec in browse_records():
+        if index.record_id(rec) != rid:
+            continue
+        row = _session_row(rec)
+        msgs = _message_list(rec)
+        row.update({
+            "messages": len(msgs),
+            "body": msgs,
+            "partial": bool(rec.raw.get("partial")) if isinstance(rec.raw, dict) else False,
+            "note": ("该数据源本地只有标题/元数据，正文在云端，读不到逐条内容"
+                     if not msgs else ""),
+        })
+        return row
+    raise KeyError(f"找不到这条会话：{rid}（可能数据已变化，刷新后重试）")
+
 
 
 def sources_info() -> List[Dict[str, Any]]:
@@ -341,6 +495,25 @@ class _Handler(BaseHTTPRequestHandler):
                     return
                 self._send(200, INDEX_HTML.read_bytes(),
                            "text/html; charset=utf-8")
+            elif url.path in ("/browse", "/browse.html"):
+                if not BROWSE_HTML.is_file():
+                    self._fail(500, f"浏览页文件缺失：{BROWSE_HTML}")
+                    return
+                self._send(200, BROWSE_HTML.read_bytes(),
+                           "text/html; charset=utf-8")
+            elif url.path == "/api/browse":
+                self._json(browse(
+                    source=query.get("source"),
+                    project=query.get("project"),
+                    q=query.get("q"),
+                    start_value=query.get("start"),
+                    end_value=query.get("end"),
+                    limit=int(query.get("limit") or _BROWSE_PAGE),
+                    offset=int(query.get("offset") or 0),
+                    refresh=query.get("refresh") in ("1", "true", "yes"),
+                ))
+            elif url.path == "/api/session":
+                self._json(session_detail(query.get("id") or ""))
             elif url.path == "/api/sources":
                 self._json(sources_info())
             elif url.path == "/api/source":
