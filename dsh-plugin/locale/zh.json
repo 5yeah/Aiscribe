@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Aiscribe 会话日报",
+    "description": "接入本机的 Aiscribe MCP 服务：读取 16 种 AI 工具的本地会话记录，按项目归纳成日报 / 周报，数据不出本机。"
+  }
+}

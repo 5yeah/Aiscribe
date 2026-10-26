@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Aiscribe">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0BB35C"/>
+      <stop offset="1" stop-color="#047A40"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#g)"/>
+  <path d="M18 15h20l8 8v26a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V17a2 2 0 0 1 2-2Z"
+        fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M38 15v8h8" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round"/>
+  <g fill="#FFFFFF" opacity=".92">
+    <rect x="22" y="30" width="12" height="2.4" rx="1.2"/>
+    <rect x="22" y="36" width="20" height="2.4" rx="1.2"/>
+    <rect x="22" y="42" width="16" height="2.4" rx="1.2"/>
+  </g>
+  <g fill="#FFFFFF">
+    <rect x="42" y="40" width="3.2" height="6" rx="1.4"/>
+    <rect x="47" y="34" width="3.2" height="12" rx="1.4"/>
+  </g>
+</svg>

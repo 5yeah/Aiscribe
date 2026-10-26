@@ -1,0 +1,27 @@
+# Aiscribe MCP 连接（配置型 bundle）
+#
+# 只做一件事：把 Aiscribe 自带的 MCP server 挂进当前 profile，
+# 于是 agent 就能调用 mcp__aireport__list_sources / get_conversations / generate_report 等工具。
+#
+# 下面三处按你的机器改（安装前确认）：
+#   command  Python 解释器绝对路径（PATH 上有 python 也可写成 python）
+#   args     不用改
+#   cwd      Aiscribe 仓库根目录，决定 -m ai_report 能否找到包
+- insert:
+    - id: aireport-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: aireport
+        transport: stdio
+        command: D:\Anaconda\python.exe
+        args:
+          - '-m'
+          - 'ai_report'
+          - 'mcp'
+          - '--stdio'
+        cwd: E:\DSH\Aiscribe
+        env:
+          # 管道里强制 UTF-8：中文标题/正文不会因为 Windows 默认代码页而乱码
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: '1'
+        failOnStartupError: true

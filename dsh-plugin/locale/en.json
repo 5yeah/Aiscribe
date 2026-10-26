@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Aiscribe Session Reports",
+    "description": "Connects the local Aiscribe MCP server: reads session history from 16 AI tools, groups it by project and writes daily/weekly reports without leaving the machine."
+  }
+}
