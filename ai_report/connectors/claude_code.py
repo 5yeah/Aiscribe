@@ -24,6 +24,7 @@ from ai_report.connectors.common import (
     content_text,
     group_by_day,
     iter_jsonl,
+    messages_payload,
     parse_iso,
     timeline,
 )
@@ -111,6 +112,7 @@ class ClaudeCodeConnector(BaseConnector):
             days = group_by_day(users)
             if len(days) == 1:
                 items = next(iter(days.values()))
+                only_day = next(iter(days))
                 records.append(UnifiedRecord(
                     source=self.name,
                     session_id=sid,
@@ -119,10 +121,8 @@ class ClaudeCodeConnector(BaseConnector):
                     start_ts=min(ts for ts, _ in items) or mtime,
                     end_ts=max(ts for ts, _ in items) or mtime,
                     summary=timeline(items, _SUMMARY_LIMIT, _SNIPPET_LIMIT),
-                    raw=dict(base_raw, messages=[
-                        {"ts": ts, "text": truncate(text, _MSG_RAW_LIMIT)}
-                        for ts, text in items
-                    ]),
+                    raw=dict(base_raw, messages=messages_payload(
+                        messages, day=only_day, limit=_MSG_RAW_LIMIT)),
                 ))
                 continue
 
@@ -135,10 +135,8 @@ class ClaudeCodeConnector(BaseConnector):
                     start_ts=min(ts for ts, _ in items),
                     end_ts=max(ts for ts, _ in items),
                     summary=timeline(items, _SUMMARY_LIMIT, _SNIPPET_LIMIT),
-                    raw=dict(base_raw, day=day, messages=[
-                        {"ts": ts, "text": truncate(text, _MSG_RAW_LIMIT)}
-                        for ts, text in items
-                    ]),
+                    raw=dict(base_raw, day=day, messages=messages_payload(
+                        messages, day=day, limit=_MSG_RAW_LIMIT)),
                 ))
 
         records.sort(key=lambda r: r.start_ts)

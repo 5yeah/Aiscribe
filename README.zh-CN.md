@@ -258,21 +258,24 @@ Windows 一键脚本：[`scripts/run_daily.bat`](scripts/run_daily.bat) / [`scri
 
 ### 有逐条正文（报告质量最高）
 
+读到的每条消息都带 `role`：`user` 是用户的诉求，`assistant` 是 AI 当时的结论与改动——
+报告里的「做了什么」来自 `assistant` 侧，不是把用户的问句改写成完成态。
+
 | 数据源 | 本地位置（自动发现） | 本地能拿到什么 |
 |---|---|---|
-| CodeBuddy CN | `%APPDATA%/CodeBuddy CN/` | 会话元数据 + **logs 里 `onAgentStart: userInput=` 还原当天逐条真实输入** |
+| CodeBuddy CN | `%APPDATA%/CodeBuddy CN/` | 会话元数据 + **logs 里 `onAgentStart: userInput=` 还原当天逐条真实输入**（只有用户侧） |
 | TRAE | `~/.trae-cn/memory/projects/` | 逐条 message 级摘要 + `topics.md` 会话级摘要 |
-| Codex | `~/.codex/` | `state_5.sqlite` 元数据 + 投影历史 / `rollout-*.jsonl.zst`（zstd）逐条正文 |
-| dsh | `~/.dsh/sessions/` | `session.v4.jsonl.zstd` 事件流里的逐条真人输入（多 zstd 帧，流式解压） |
+| Codex | `~/.codex/` | `state_5.sqlite` 元数据 + 投影历史 / `rollout-*.jsonl.zst`（zstd）逐条 user + assistant |
+| dsh | `~/.dsh/sessions/` | `session.v4.jsonl.zstd` 事件流里的逐条 user + assistant（多 zstd 帧，流式解压） |
 | Claude Code | `~/.claude/projects/` | `**/*.jsonl` 逐条 user / assistant（自动跳过子代理对话与本地命令噪音） |
-| Gemini CLI | `~/.gemini/tmp/*/chats/` | `session-*.json` 逐条消息 |
+| Gemini CLI | `~/.gemini/tmp/*/chats/` | `session-*.json` 逐条 user / model |
 | Qwen Code | `~/.qwen/tmp/*/chats/` | 同上（Gemini CLI 分支，格式一致） |
 | iFlow | `~/.iflow/tmp/*/chats/` | 同上（Gemini CLI 分支，格式一致） |
-| Copilot Chat | `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/` | VS Code 内建聊天 `*.jsonl` + `chat.ChatSessionStore.index` |
-| Cline | `…/globalStorage/saoudrizwan.claude-dev/tasks/` | `api_conversation_history.json` 逐条消息 |
+| Copilot Chat | `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/` | VS Code 内建聊天 `*.jsonl`：提问 + 回复分片 |
+| Cline | `…/globalStorage/saoudrizwan.claude-dev/tasks/` | `api_conversation_history.json` 逐条 user / assistant |
 | Roo Code | `…/globalStorage/rooveterinaryinc.roo-cline/tasks/` | 同上（同源插件，格式一致） |
 | Kilo Code | `…/globalStorage/kilocode.kilo-code/tasks/` | 同上（同源插件，格式一致） |
-| Cursor | `%APPDATA%/Cursor/User/globalStorage/state.vscdb` | `cursorDiskKV` 的 `composerData:*` + `bubbleId:*` |
+| Cursor | `%APPDATA%/Cursor/User/globalStorage/state.vscdb` | `cursorDiskKV` 的 `composerData:*` + `bubbleId:*`（气泡带 type，可区分角色） |
 
 ### 只有标题 / 元数据（正文在云端）
 
@@ -302,6 +305,7 @@ zstd 解压、JSONL 读取、ISO 时间解析、正文块抽取、注入上下�
 | `AIREREPORT_TRIMS` | 引导页时间剪辑文件 | 默认 `<仓库>/trims.json` |
 | `AIREREPORT_PROJECTS` | 项目分类规则文件 | 依次找 `<仓库>/projects.json`、`~/.aireport/projects.json`，都没有则用内置规则 + cwd 兜底 |
 | `CODEBUDDY_CN_DB` `WORKBUDDY_DB` `DOUBAO_IDB_DIR` `KIMI_DIR` `TRAE_ROOTS` `TRAE_MEMORY_DIR` `CODEX_DIR` `DSH_SESSIONS_DIR` `CLAUDE_CODE_DIR` `GEMINI_DIR` `QWEN_CODE_DIR` `IFLOW_DIR` `CURSOR_DB` `VSCODE_USER_DIRS` `VSCODE_GLOBAL_STORAGE` | 覆盖数据源路径（多目录型用 `;` 分隔） | 用自动发现的默认路径 |
+| `AIREREPORT_SCAN_ALL_USERS` | 设 `1` 才会读**同机其他 Windows 用户**的会话目录 | 默认关闭（别人的会话不该被默认读进来） |
 | `DEEPSEEK_API_KEY` / `LLM_PROVIDER` | LLM 润色（可选） | `--llm` 自动退回模板模式 |
 
 项目分类想固定叫法时，复制 [`projects.example.json`](projects.example.json) 为 `projects.json` 再改
@@ -310,9 +314,21 @@ zstd 解压、JSONL 读取、ISO 时间解析、正文块抽取、注入上下�
 ## 隐私声明
 
 - 所有会话数据**只在本机读取**，**绝不上传**；连接器不联网、不调用云端接口
+- 默认只读**当前用户**的目录；同机其他用户的会话要显式设 `AIREREPORT_SCAN_ALL_USERS=1` 才会碰
 - 只有**最终生成的报告文本**（已非原始对话）在用户主动开启 `--llm` 时才发往 LLM 端点
 - 报告只写到本地 `reports/`；MCP 的 HTTP 模式与引导页都只监听 `127.0.0.1`
+- 引导页/浏览页会校验 `Host` 与 `Origin`：只接受回环地址且同源的请求，挡掉 DNS rebinding
+  （把域名解析到 127.0.0.1 再让网页打本地端口的攻击）
 - `.gitignore` 已排除 `reports/`、`projects.json`、`trims.json`、`dingtalk_config.json`、`automation.json`，避免个人内容误入库
+
+## 已知限制
+
+- **每次取数都重读所有源**：本机 166 条记录约 0.7 秒。耗时集中在 dsh、CodeBuddy CN、豆包
+  的纯 Python 解析上（实测线程并发只有 1.01x，受 GIL 限制，所以没做）。真正有效的优化是按
+  文件指纹做持久化缓存——**尚未实现**。
+- **assistant 正文不是每个源都有**：CodeBuddy CN 只从日志还原用户输入；WorkBuddy / Kimi / 豆包
+  本地只有标题。这几类源在报告里只能贡献「问过什么」。
+- **Codex / dsh 需要 zstd**：装了 `zstandard` 或系统有 `zstd` 才能读正文，否则自动退化为元数据。
 
 ## 目录结构
 

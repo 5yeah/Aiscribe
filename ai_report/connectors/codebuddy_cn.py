@@ -231,7 +231,8 @@ class CodeBuddyCNConnector(BaseConnector):
                             "cwd": meta.get("cwd"),
                             "day": day,
                             "messages": [
-                                {"ts": ts, "text": truncate(text, _MSG_RAW_LIMIT)}
+                                {"ts": ts, "role": "user",
+                                 "text": truncate(text, _MSG_RAW_LIMIT)}
                                 for ts, text in items
                             ],
                         },

@@ -25,8 +25,8 @@ from ai_report.utils import now_bj, truncate
 
 FOOTER = (
     "---\n"
-    "说明：数据来自本地会话元数据与本地日志还原的用户输入；"
-    "“具体动作”为当日真实操作内容摘录。"
+    "说明：数据来自本地会话文件；“具体动作”为用户当时的诉求，"
+    "“→”后为 AI 当时给出的结论或改动（有 assistant 正文的源才有）。"
 )
 
 _CN_NUM = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
@@ -145,6 +145,25 @@ def _slot_key(item: Dict[str, str]) -> str:
     return ("t:" + title) if len(title) >= 6 else ""
 
 
+def _assistant_hint(rec: UnifiedRecord, limit: int = 120) -> str:
+    """从 raw["messages"] 里取 AI 侧的要点，附在「具体动作」后面。
+
+    模板直出（不配归纳引擎）时，只写用户输入会看不出结果；有 assistant 正文就说明
+    「做了什么」。没有正文的数据源（WorkBuddy / Kimi / 豆包）自然返回空串，行为不变。
+    """
+    raw = rec.raw if isinstance(rec.raw, dict) else {}
+    msgs = raw.get("messages")
+    if not isinstance(msgs, list):
+        return ""
+    texts = [str(m.get("text") or "") for m in msgs
+             if isinstance(m, dict) and str(m.get("role") or "") == "assistant"]
+    texts = [t for t in texts if t.strip()]
+    if not texts:
+        return ""
+    # 取最后一条：通常是最直接的结论/改动说明
+    return _clean_timeline(truncate(" ".join(texts[-1].split()), limit))
+
+
 def _slots(recs: List[UnifiedRecord]) -> List[Dict[str, str]]:
     """记录 → 条目槽位（title/body 两段文字）。
 
@@ -156,6 +175,9 @@ def _slots(recs: List[UnifiedRecord]) -> List[Dict[str, str]]:
     seen = set()
     for rec in recs:
         body = _clean_timeline(rec.summary)
+        hint = _assistant_hint(rec)
+        if hint and hint not in body:
+            body = f"{body}；→ {hint}".strip("；")
         if (rec.summary or "").strip() and not body:
             continue
         item = {"title": _display_title(rec) or "(无标题)", "body": body}

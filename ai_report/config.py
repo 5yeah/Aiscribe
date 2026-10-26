@@ -50,13 +50,26 @@ AGENT_EDITOR_DIRS = EDITOR_DIRS + ("Cursor", "Trae CN", "Windsurf")
 CURSOR_DB_REL = ("Cursor", "User", "globalStorage", "state.vscdb")  # %APPDATA%
 
 
+#: 是否扫描同机其他 Windows 用户的目录（默认关闭：多人共用机器上属于越界读取）
+ENV_SCAN_ALL_USERS = "AIREREPORT_SCAN_ALL_USERS"
+
+
 def _home() -> Path:
     """当前用户主目录（Windows 上即 C:/Users/<用户名>）。"""
     return Path(os.path.expanduser("~"))
 
 
+def scan_all_users() -> bool:
+    """读 `AIREREPORT_SCAN_ALL_USERS`：1/true/yes/on 才扫其他用户的目录。"""
+    return (os.environ.get(ENV_SCAN_ALL_USERS) or "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
 def _other_homes() -> List[Path]:
-    """同机其他用户的用户目录（多账号机器兜底）；排除 Public 等非用户目录。"""
+    """同机其他用户的用户目录；排除 Public 等非用户目录。
+
+    默认**不**调用（见 scan_all_users）。多人共用的机器上，别人的会话属于别人的隐私。
+    """
     me = _home()
     root = me.parent
     if not root.is_dir():
@@ -105,8 +118,12 @@ def _dirs(candidates: List[Path]) -> str:
 
 
 def default_paths() -> Dict[str, str]:
-    """按当前机器自动推导各数据源路径（当前用户优先，其他用户目录兜底）。"""
-    homes = _dedupe([_home()] + _other_homes())
+    """按当前机器自动推导各数据源路径。
+
+    只推导**当前用户**的目录；`AIREREPORT_SCAN_ALL_USERS=1` 时才追加同机其他用户
+    （多人共用一台机器时，别人的会话不该被默认读进来）。
+    """
+    homes = _dedupe([_home()] + (_other_homes() if scan_all_users() else []))
     roaming = _dedupe([Path(os.environ["APPDATA"]) if os.environ.get("APPDATA")
                        else _home() / "AppData" / "Roaming"]
                       + [h / "AppData" / "Roaming" for h in homes])

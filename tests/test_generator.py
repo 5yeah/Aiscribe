@@ -100,6 +100,39 @@ class TestEmpty(unittest.TestCase):
         self.assertIn("本期没有符合条件的 AI 会话记录", md)
 
 
+class TestAssistantSide(unittest.TestCase):
+    """模板直出也要能看出「做了什么」：assistant 侧的要点附在具体动作后面。"""
+
+    def _rec(self, messages):
+        r = UnifiedRecord(
+            source="dsh", session_id="s1", title="改报告模板", project="Aiscribe",
+            status="", cwd=r"E:\DSH\Aiscribe",
+            start_ts=ts(2026, 10, 26, 9), end_ts=ts(2026, 10, 26, 9, 30),
+            summary="09:00 把日报模板换掉", raw={"messages": messages},
+        )
+        return r
+
+    def test_assistant_hint_appended(self):
+        rec = self._rec([
+            {"ts": ts(2026, 10, 26, 9), "role": "user", "text": "把日报模板换掉"},
+            {"ts": ts(2026, 10, 26, 9, 5), "role": "assistant",
+             "text": "已把模板换成你以前的周报格式，并重跑了三份"},
+        ])
+        md = generator.render_daily(date(2026, 10, 26), records=[rec])
+        self.assertIn("把日报模板换掉", md)
+        self.assertIn("→", md)
+        self.assertIn("并重跑了三份", md)
+
+    def test_no_hint_without_assistant(self):
+        rec = self._rec([
+            {"ts": ts(2026, 10, 26, 9), "role": "user", "text": "把日报模板换掉"},
+        ])
+        md = generator.render_daily(date(2026, 10, 26), records=[rec])
+        self.assertIn("把日报模板换掉", md)
+        # 脚注里本来就有「→」的说明，只看正文那条有没有追加
+        self.assertNotIn("；→", md)
+
+
 class TestWeekly(unittest.TestCase):
     def test_week_range(self):
         # 2026-10-09 是周五，本周一=10-05，周日=10-11 → 包含 10-01 之外全部

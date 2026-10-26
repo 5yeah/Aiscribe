@@ -25,6 +25,7 @@ from ai_report.connectors.common import (
     content_text,
     group_by_day,
     iter_jsonl,
+    messages_payload,
     timeline,
 )
 from ai_report.models import UnifiedRecord
@@ -110,8 +111,35 @@ class VSCodeChatConnector(BaseConnector):
 
     # ---- 单会话 ----
     @staticmethod
-    def _user_messages(requests: List[dict]) -> List[Tuple[float, str]]:
-        out: List[Tuple[float, str]] = []
+    def _response_text(req: dict) -> str:
+        """从一条 request 的 response 里抽 AI 回复正文。
+
+        VS Code 的回复是分片数组：每片可能是 `{value}`（markdown）、
+        `{kind:'markdownContent', value}` 或 `{text}`，工具调用等分片跳过。
+        """
+        parts = req.get("response")
+        if not isinstance(parts, list):
+            return ""
+        texts: List[str] = []
+        for part in parts:
+            if isinstance(part, str):
+                texts.append(part)
+                continue
+            if not isinstance(part, dict):
+                continue
+            kind = safe_str(part.get("kind")).lower()
+            if kind in ("toolInvocationSerialized", "inlineReference",
+                        "command", "progress", "thinking"):
+                continue
+            value = part.get("value") or part.get("text") or part.get("content")
+            if isinstance(value, str) and value.strip():
+                texts.append(value)
+        return "\n".join(texts).strip()
+
+    @classmethod
+    def _messages(cls, requests: List[dict]) -> List[Tuple[float, str, str]]:
+        """每条 request 拆成「用户提问」+「AI 回复」两条消息。"""
+        out: List[Tuple[float, str, str]] = []
         for req in requests:
             text = ""
             message = req.get("message")
@@ -121,14 +149,16 @@ class VSCodeChatConnector(BaseConnector):
                 text = message.strip()
             if not text:
                 text = content_text(req.get("prompt") or req.get("text"))
-            if not text:
-                continue
             ts = parse_ts(
                 req.get("timestamp")
                 or (req.get("result") or {}).get("timestamp")
                 or req.get("createdAt")
             )
-            out.append((ts, text))
+            if text:
+                out.append((ts, "user", text))
+            reply = cls._response_text(req)
+            if reply:
+                out.append((ts, "assistant", reply))
         out.sort(key=lambda x: x[0])
         return out
 
@@ -158,7 +188,8 @@ class VSCodeChatConnector(BaseConnector):
         except OSError:
             mtime = 0.0
 
-        users = self._user_messages(_requests(path))
+        messages = self._messages(_requests(path))
+        users = [(ts, text) for ts, role, text in messages if role == "user"]
         raw_title = safe_str(meta.get("title")).strip()
         if raw_title in ("New Chat", "Untitled"):
             raw_title = ""
@@ -186,6 +217,7 @@ class VSCodeChatConnector(BaseConnector):
         days = group_by_day(users)
         if len(days) == 1:
             items = next(iter(days.values()))
+            only_day = next(iter(days))
             return [UnifiedRecord(
                 source=self.name,
                 session_id=sid,
@@ -194,10 +226,8 @@ class VSCodeChatConnector(BaseConnector):
                 start_ts=min(ts for ts, _ in items) or created or mtime,
                 end_ts=max(ts for ts, _ in items) or end_hint,
                 summary=timeline(items, _SUMMARY_LIMIT, _SNIPPET_LIMIT),
-                raw=dict(cwd=cwd, messages=[
-                    {"ts": ts, "text": truncate(text, _MSG_RAW_LIMIT)}
-                    for ts, text in items
-                ]),
+                raw=dict(cwd=cwd, messages=messages_payload(
+                    messages, day=only_day, limit=_MSG_RAW_LIMIT)),
             )]
 
         out: List[UnifiedRecord] = []
@@ -210,10 +240,8 @@ class VSCodeChatConnector(BaseConnector):
                 start_ts=min(ts for ts, _ in items),
                 end_ts=max(ts for ts, _ in items),
                 summary=timeline(items, _SUMMARY_LIMIT, _SNIPPET_LIMIT),
-                raw=dict(cwd=cwd, day=day, messages=[
-                    {"ts": ts, "text": truncate(text, _MSG_RAW_LIMIT)}
-                    for ts, text in items
-                ]),
+                raw=dict(cwd=cwd, day=day, messages=messages_payload(
+                    messages, day=day, limit=_MSG_RAW_LIMIT)),
             ))
         return out
 

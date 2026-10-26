@@ -26,6 +26,7 @@ from ai_report.connectors.common import (
     content_text,
     group_by_day,
     iter_jsonl,
+    messages_payload,
     timeline,
 )
 from ai_report.models import UnifiedRecord
@@ -140,7 +141,7 @@ class DshConnector(BaseConnector):
                 start_ts=start,
                 end_ts=end or start,
                 summary=truncate(cache.get("first_text") or text, _SUMMARY_LIMIT),
-                raw={"messages": 0, "partial": not messages},
+                raw={"message_count": 0, "partial": not messages},
             )]
 
         days = group_by_day(users)
@@ -155,11 +156,10 @@ class DshConnector(BaseConnector):
                 end_ts=max(ts for ts, _ in items),
                 summary=timeline(items, _SUMMARY_LIMIT, _SNIPPET_LIMIT),
                 raw={
-                    "messages": [
-                        {"ts": ts, "role": "user", "text": truncate(text, _MSG_RAW_LIMIT)}
-                        for ts, text in items
-                    ],
-                    "message_count": len(users),
+                    # 两个角色都留：assistant 的结论同样要进报告素材
+                    "messages": messages_payload(messages, day=only_day,
+                                                 limit=_MSG_RAW_LIMIT),
+                    "message_count": len(messages),
                     "day": only_day,
                 },
             )]
@@ -176,11 +176,9 @@ class DshConnector(BaseConnector):
                 end_ts=max(ts for ts, _ in items),
                 summary=timeline(items, _SUMMARY_LIMIT, _SNIPPET_LIMIT),
                 raw={
-                    "messages": [
-                        {"ts": ts, "role": "user", "text": truncate(text, _MSG_RAW_LIMIT)}
-                        for ts, text in items
-                    ],
-                    "message_count": len(users),
+                    "messages": messages_payload(messages, day=day,
+                                                 limit=_MSG_RAW_LIMIT),
+                    "message_count": len(messages),
                     "day": day,
                 },
             ))

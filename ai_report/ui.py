@@ -466,6 +466,9 @@ def build_instruction(ids: List[str], mode: str = "daily",
 class _Handler(BaseHTTPRequestHandler):
     server_version = "aireport-ui"
 
+    #: 只接受本机回环地址访问（DNS rebinding 会让 Host 变成攻击者域名）
+    _LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1", "[::1]")
+
     # ---- 基础响应 ----
 
     def _send(self, code: int, body: bytes, ctype: str) -> None:
@@ -483,9 +486,39 @@ class _Handler(BaseHTTPRequestHandler):
     def _fail(self, code: int, message: str) -> None:
         self._json({"error": message}, code)
 
+    # ---- 来源校验 ----
+
+    def _reject_foreign(self) -> bool:
+        """拒绝非本机来源；是外来请求时返回 True（已回 403）。
+
+        只监听 127.0.0.1 并不等于安全：DNS rebinding 能让任意网页把请求打到
+        本地端口。两道校验：
+        1. Host 必须是回环地址（rebinding 时 Host 是攻击者域名）
+        2. 带 Origin 的写请求，Origin 必须与 Host 同源
+        """
+        host = (self.headers.get("Host") or "").strip().lower()
+        hostname = host
+        if hostname.startswith("["):                    # [::1]:5071
+            hostname = hostname.split("]")[0] + "]"
+        elif ":" in hostname:
+            hostname = hostname.rsplit(":", 1)[0]
+        if hostname not in self._LOCAL_HOSTS:
+            self._fail(403, "只接受本机回环地址访问")
+            return True
+
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if origin:
+            allowed = {f"http://{host}", f"https://{host}"}
+            if origin not in allowed:
+                self._fail(403, "跨源请求被拒绝")
+                return True
+        return False
+
     # ---- 路由 ----
 
     def do_GET(self):  # noqa: N802 - 标准库回调命名
+        if self._reject_foreign():
+            return
         url = urlparse(self.path)
         query = {k: v[0] for k, v in parse_qs(url.query).items()}
         try:
@@ -548,6 +581,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._fail(500, f"{type(exc).__name__}: {exc}")
 
     def do_POST(self):  # noqa: N802 - 标准库回调命名
+        if self._reject_foreign():
+            return
         url = urlparse(self.path)
         try:
             length = int(self.headers.get("Content-Length", "0"))

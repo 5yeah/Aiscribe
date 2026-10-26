@@ -140,7 +140,10 @@ class TestDsh(_Tmp):
         self.assertEqual(rec.cwd, r"E:\DSH\Aiscribe")
         self.assertIn("帮我整理日报", rec.summary)
         self.assertNotIn("Current runtime context", rec.summary)
-        self.assertEqual(len(rec.raw["messages"]), 1)  # 注入消息被剔除
+        # 两个角色都进素材：user 的诉求 + assistant 的结论（注入消息已被剔除）
+        self.assertEqual([m["role"] for m in rec.raw["messages"]],
+                         ["user", "assistant"])
+        self.assertIn("好的，这就整理", rec.raw["messages"][1]["text"])
 
 
 class TestClaudeCode(_Tmp):
@@ -264,7 +267,10 @@ class TestCline(_Tmp):
         self.assertEqual(recs[0].source, "Cline")
         self.assertEqual(recs[0].title, "把这个脚本改成异步")
         self.assertEqual(recs[0].cwd, r"E:\DSH\Aiscribe")
-        self.assertEqual(len(recs[0].raw["messages"]), 1)  # tool_result 不算正文
+        # tool_result 不算正文；user 诉求 + assistant 结论各一条
+        self.assertEqual([m["role"] for m in recs[0].raw["messages"]],
+                         ["user", "assistant"])
+        self.assertEqual(recs[0].raw["messages"][1]["text"], "改好了")
 
 
 class TestCursor(_Tmp):

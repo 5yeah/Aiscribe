@@ -32,6 +32,7 @@ from ai_report.connectors.common import (
     group_by_day,
     is_injected_user_text,
     iter_jsonl,
+    messages_payload,
     parse_iso,
     strip_long_path,
     timeline,
@@ -240,10 +241,9 @@ class CodexConnector(BaseConnector):
             end = max(ts for ts, _ in items) or updated
             rec_raw = dict(base_raw)
             rec_raw["day"] = day
-            rec_raw["messages"] = [
-                {"ts": ts, "role": "user", "text": truncate(text, _MSG_RAW_LIMIT)}
-                for ts, text in items
-            ]
+            # 两个角色都留：assistant 的结论/改动同样要进报告素材
+            rec_raw["messages"] = messages_payload(messages, day=day,
+                                                   limit=_MSG_RAW_LIMIT)
             records.append(UnifiedRecord(
                 source=self.name,
                 session_id=tid if len(days) == 1 else f"{tid}:{day}",

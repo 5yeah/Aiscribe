@@ -198,11 +198,27 @@ def _dedupe(records: Iterable[UnifiedRecord]) -> List[UnifiedRecord]:
     return result
 
 
+def _read_one(conn) -> List[UnifiedRecord]:
+    """单个连接器的读取，异常不外抛（一个源坏了不该拖垮整份报告）。"""
+    try:
+        return conn.read()
+    except Exception as exc:  # noqa: BLE001 - 连接器是第三方格式，容错优先
+        log(f"[{conn.name}] 读取失败（已跳过）：{type(exc).__name__}: {exc}")
+        return []
+
+
 def collect() -> List[UnifiedRecord]:
-    """遍历可用连接器，合并 → 分类 → 去重 → 按开始时间排序。"""
+    """遍历可用连接器，合并 → 分类 → 去重 → 按开始时间排序。
+
+    顺手加了单一数据源的失败隔离：某个连接器解析崩了只丢它自己，不拖垮整份报告。
+
+    注：这里**不**并发。实测（2026-10）串行 0.70s vs 线程池 0.69s——耗时集中在
+    dsh / CodeBuddy CN / 豆包 的纯 Python 解析上，受 GIL 限制，线程换不来墙钟时间。
+    真要提速得做「按文件指纹的持久化缓存」，见 README 的「已知限制」。
+    """
     merged: List[UnifiedRecord] = []
     for conn in iter_available():
-        merged.extend(conn.read())
+        merged.extend(_read_one(conn))
 
     for rec in merged:
         rec.project = classify(cwd=rec.cwd, title=rec.title)
@@ -345,10 +361,14 @@ def records_payload(records: Iterable[UnifiedRecord], detail: str = "full",
             }
             msgs = r.raw.get("messages") if isinstance(r.raw, dict) else None
             if want_full and msgs:
-                # 有逐条原文就用原文（AI 需要完整上下文才能归纳）
+                # 有逐条原文就用原文（AI 需要完整上下文才能归纳）。
+                # role 一并给出去：user 是诉求，assistant 是结论/改动，归纳时要能区分。
                 items_msgs = [
-                    {"time": fmt_bj(m.get("ts", 0), "%H:%M"), "text": m.get("text", "")}
+                    {"time": fmt_bj(m.get("ts", 0), "%H:%M"),
+                     "role": str(m.get("role") or "user"),
+                     "text": m.get("text", "")}
                     for m in msgs
+                    if str(m.get("text") or "").strip()
                 ]
                 if win:
                     items_msgs = [m for m in items_msgs

@@ -59,6 +59,19 @@ class TestRecordsPayload(unittest.TestCase):
     def test_payload_full_detail_keeps_messages(self):
         entry = index.records_payload([_rec()], detail="full")["projects"][0]["records"][0]
         self.assertEqual(entry["messages"][0]["text"], "请覆盖部署")
+        # role 要透传：归纳时得能区分「用户诉求」和「AI 结论」
+        self.assertEqual(entry["messages"][0]["role"], "user")
+
+    def test_payload_keeps_assistant_side(self):
+        rec = _rec()
+        rec.raw["messages"] = [
+            {"ts": 1791511200, "role": "user", "text": "请覆盖部署"},
+            {"ts": 1791511260, "role": "assistant", "text": "已把 app.yaml 的副本数改成 3"},
+        ]
+        entry = index.records_payload([rec], detail="full")["projects"][0]["records"][0]
+        roles = [m["role"] for m in entry["messages"]]
+        self.assertEqual(roles, ["user", "assistant"])
+        self.assertIn("副本数改成 3", entry["messages"][1]["text"])
 
     def test_payload_filters_by_ids(self):
         keep = index.record_id(_rec())
@@ -155,6 +168,41 @@ class TestUiRoutes(unittest.TestCase):
             self.assertEqual(exc.code, 400)
         else:  # pragma: no cover - 正常不会走到这里
             self.fail("未注册的数据源应返回 400")
+
+    # ---- 来源校验：只监听回环地址不等于安全（DNS rebinding）----
+
+    def _status_with_headers(self, path, headers, method="GET", data=None):
+        req = urllib.request.Request(self.base + path, method=method, data=data,
+                                     headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status
+        except urllib.error.HTTPError as exc:
+            return exc.code
+
+    def test_foreign_host_is_rejected(self):
+        # 域名解析到 127.0.0.1 时，Host 仍是攻击者域名 → 必须 403
+        code = self._status_with_headers("/api/sources", {"Host": "evil.example.com"})
+        self.assertEqual(code, 403)
+
+    def test_cross_origin_post_is_rejected(self):
+        code = self._status_with_headers(
+            "/api/instruction",
+            {"Host": self.base.split("//", 1)[1],
+             "Origin": "http://evil.example.com",
+             "Content-Type": "application/json"},
+            method="POST", data=json.dumps({"ids": ["x"]}).encode("utf-8"))
+        self.assertEqual(code, 403)
+
+    def test_same_origin_post_still_allowed(self):
+        host = self.base.split("//", 1)[1]
+        code = self._status_with_headers(
+            "/api/instruction",
+            {"Host": host, "Origin": "http://" + host,
+             "Content-Type": "application/json"},
+            method="POST", data=json.dumps({"ids": []}).encode("utf-8"))
+        # 400 是业务错误（ids 为空），说明来源校验放行了
+        self.assertEqual(code, 400)
 
     def test_instruction_requires_ids(self):
         req = urllib.request.Request(

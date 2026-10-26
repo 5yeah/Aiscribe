@@ -204,6 +204,30 @@ def group_by_day(messages: List[tuple]) -> dict:
     return days
 
 
+def day_key(ts: float) -> str:
+    """epoch 秒 -> 北京时间自然日 `YYYY-MM-DD`（ts 为 0 时返回空串）。"""
+    return to_bj(ts).date().isoformat() if ts else ""
+
+
+def messages_payload(messages: List[tuple], day: str = "",
+                     limit: int = 2000) -> List[dict]:
+    """把 `[(ts, role, text)]` 归一化成 `raw["messages"]`。
+
+    两个角色都保留——只留用户输入的话，报告只能看出「问了什么」，看不出
+    「AI 改了什么、结论是什么」。`day` 非空时只保留该自然日，单条截断到 `limit`。
+    """
+    out: List[dict] = []
+    for ts, role, text in messages:
+        text = (text or "").strip()
+        if not text:
+            continue
+        if day and day_key(ts) != day:
+            continue
+        out.append({"ts": ts, "role": role or "user",
+                    "text": truncate(text, limit)})
+    return out
+
+
 def timeline(items: List[tuple], limit: int = 400, snippet: int = 60) -> str:
     """渲染成单行时间线：'14:41 xxx；14:43 yyy…'。
 

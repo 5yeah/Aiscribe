@@ -251,19 +251,23 @@ full text; without either they degrade to metadata-only — never an error, neve
 
 | Source | Auto-discovered location | What is available locally |
 |---|---|---|
-| CodeBuddy CN | `%APPDATA%/CodeBuddy CN/` | Session metadata + **raw sent inputs via `onAgentStart: userInput=` in logs** |
+| CodeBuddy CN | `%APPDATA%/CodeBuddy CN/` | Session metadata + **raw sent inputs via `onAgentStart: userInput=` in logs** (user side only) |
 | TRAE | `~/.trae-cn/memory/projects/` | Per-message summaries + `topics.md` session summaries |
-| Codex | `~/.codex/` | `state_5.sqlite` metadata + projected history / `rollout-*.jsonl.zst` messages |
-| dsh | `~/.dsh/sessions/` | Per-message real user inputs from the `session.v4.jsonl.zstd` event stream |
+| Codex | `~/.codex/` | `state_5.sqlite` metadata + projected history / `rollout-*.jsonl.zst` user **and** assistant turns |
+| dsh | `~/.dsh/sessions/` | Per-message user **and** assistant turns from the `session.v4.jsonl.zstd` event stream |
 | Claude Code | `~/.claude/projects/` | `**/*.jsonl` user/assistant turns (sidechains and local-command noise skipped) |
-| Gemini CLI | `~/.gemini/tmp/*/chats/` | `session-*.json` messages |
+| Gemini CLI | `~/.gemini/tmp/*/chats/` | `session-*.json` user/model messages |
 | Qwen Code | `~/.qwen/tmp/*/chats/` | Same format (Gemini CLI fork) |
 | iFlow | `~/.iflow/tmp/*/chats/` | Same format (Gemini CLI fork) |
-| Copilot Chat | `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/` | VS Code built-in chat `*.jsonl` + `chat.ChatSessionStore.index` |
-| Cline | `…/globalStorage/saoudrizwan.claude-dev/tasks/` | `api_conversation_history.json` messages |
+| Copilot Chat | `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/` | VS Code built-in chat `*.jsonl`: prompt + response parts |
+| Cline | `…/globalStorage/saoudrizwan.claude-dev/tasks/` | `api_conversation_history.json` user/assistant messages |
 | Roo Code | `…/globalStorage/rooveterinaryinc.roo-cline/tasks/` | Same format (same lineage) |
 | Kilo Code | `…/globalStorage/kilocode.kilo-code/tasks/` | Same format (same lineage) |
-| Cursor | `%APPDATA%/Cursor/User/globalStorage/state.vscdb` | `cursorDiskKV` `composerData:*` + `bubbleId:*` |
+| Cursor | `%APPDATA%/Cursor/User/globalStorage/state.vscdb` | `cursorDiskKV` `composerData:*` + typed `bubbleId:*` |
+
+Every message carries a `role`: `user` is what the person asked, `assistant` is what the AI concluded
+or changed. “What was done” in a report comes from the `assistant` side — never rewrite the question
+into a past-tense claim.
 
 ### Titles / metadata only (bodies live in the cloud)
 
@@ -286,6 +290,7 @@ and each can be overridden by an environment variable (see `python -m ai_report 
 | `AIREREPORT_TRIMS` | Session time-trim file | `<repo>/trims.json` |
 | `AIREREPORT_PROJECTS` | Project classification rules | `<repo>/projects.json`, then `~/.aireport/projects.json`, then built-ins + cwd fallback |
 | `CODEBUDDY_CN_DB` … `VSCODE_GLOBAL_STORAGE` | Override a source path (multi-dir values use `;`) | Auto-discovered |
+| `AIREREPORT_SCAN_ALL_USERS` | Set `1` to also read **other Windows users'** session dirs on this machine | Off — other people's sessions are not read by default |
 | `DEEPSEEK_API_KEY`, `LLM_PROVIDER` | Optional LLM polish | `--llm` falls back to template mode |
 
 Copy [`projects.example.json`](projects.example.json) to `projects.json` to pin your own project names.
@@ -293,10 +298,24 @@ Copy [`projects.example.json`](projects.example.json) to `projects.json` to pin 
 ## Privacy
 
 - Everything is read from local files only; connectors never go online or upload anything
+- Only the **current user's** directories are read; other users on the same machine require
+  `AIREREPORT_SCAN_ALL_USERS=1`
 - Only the **finished report text** (no raw conversations) can reach an LLM endpoint, and only when
   you explicitly pass `--llm`
 - Reports stay in local `reports/`; both the optional HTTP mode and the guide page bind to `127.0.0.1` only
+- The guide/browse pages validate `Host` and `Origin` and reject anything that is not a loopback,
+  same-origin request — this blocks DNS rebinding (a domain pointed at 127.0.0.1 driving your local port)
 - `.gitignore` excludes `reports/`, `projects.json`, `trims.json`, `dingtalk_config.json`, `automation.json`
+
+## Known limitations
+
+- **Every collection re-reads every source**: 166 local records ≈ 0.7 s. The time sits in the pure-Python
+  parsing of dsh, CodeBuddy CN and Doubao (a thread pool measured 1.01x — GIL-bound, so it is not used).
+  The real fix is a file-fingerprint cache — **not implemented yet**.
+- **Assistant text is not available everywhere**: CodeBuddy CN only reconstructs user inputs; WorkBuddy,
+  Kimi and Doubao keep titles only. Those sources can only contribute “what was asked”.
+- **Codex / dsh need zstd**: with `zstandard` or a `zstd` binary you get the text, otherwise the connector
+  degrades to metadata.
 
 ## Layout
 
