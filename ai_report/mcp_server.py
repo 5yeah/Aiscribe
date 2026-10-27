@@ -28,14 +28,30 @@ SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 SERVER_INFO = {"name": "aireport", "version": "0.1.0"}
 
+#: initialize 时交给模型的使用约束：原文会进入模型上下文，必须让用户知情
+INSTRUCTIONS = (
+    "Aiscribe 只读取本机 AI 会话文件，不联网、不上传完整会话。"
+    "但工具返回的内容会进入当前模型的上下文：如果使用的是云端模型，"
+    "detail='full' 的对话原文等同于发送给该模型提供商。"
+    "默认先用 detail='summary' 摸底；只有用户明确要求生成报告并知晓这一点时，"
+    "才对相关项目使用 detail='full'。不要读取与当前请求无关的日期或项目。"
+)
+
+_READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
+_WRITE_LOCAL = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
+
+
 TOOLS: List[Dict[str, Any]] = [
     {
         "name": "list_sources",
+        "title": "列出本机会话数据源",
         "description": "列出本机已发现的 AI 会话数据源（Codex/Copilot/CodeBuddy/WorkBuddy 等）及可用状态与会话数",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "annotations": _READ_ONLY,
     },
     {
         "name": "generate_report",
+        "title": "生成本地报告草稿",
         "description": (
             "用内置模板直接生成日报/周报（不含理解归纳，仅按项目罗列当日记录）。"
             "需要归纳总结时请改用 get_conversations 取原始素材、由你（AI）撰写后 save_report 落盘"
@@ -49,6 +65,8 @@ TOOLS: List[Dict[str, Any]] = [
                          "description": "YYYY-MM-DD；daily 为报告日，weekly 为周内任意一天，默认今天"},
                 "start": {"type": "string", "description": "range 模式起始日期 YYYY-MM-DD"},
                 "end": {"type": "string", "description": "range 模式结束日期 YYYY-MM-DD"},
+                "format": {"type": "string", "enum": ["md", "docx", "html"], "default": "md",
+                           "description": "输出格式：md / docx / html"},
                 "polish": {"type": "boolean", "default": False,
                            "description": "是否用 LLM 润色（需要 DEEPSEEK_API_KEY，失败自动退回模板）"},
                 "save": {"type": "boolean", "default": False,
@@ -56,12 +74,15 @@ TOOLS: List[Dict[str, Any]] = [
             },
             "required": [],
         },
+        "annotations": _WRITE_LOCAL,
     },
     {
         "name": "get_conversations",
+        "title": "读取会话素材",
         "description": (
             "取指定日期/区间的原始对话素材（按项目分组，含用户逐条真实输入全文），"
-            "供 AI 自行阅读、理解并归纳成工作报告。这是“会理解”的推荐入口"
+            "供 AI 自行阅读、理解并归纳成工作报告。这是“会理解”的推荐入口。"
+            "注意：返回内容会进入模型上下文；默认先 summary，确认需要后再 full"
         ),
         "inputSchema": {
             "type": "object",
@@ -74,16 +95,18 @@ TOOLS: List[Dict[str, Any]] = [
                 "end": {"type": "string", "description": "range 模式结束日期 YYYY-MM-DD"},
                 "project": {"type": "string",
                             "description": "只取某个项目（可选，缺省返回全部项目）"},
-                "detail": {"type": "string", "enum": ["full", "summary"], "default": "full",
-                           "description": "full 返回逐条消息全文；summary 只返回单行时间线"},
+                "detail": {"type": "string", "enum": ["full", "summary"], "default": "summary",
+                           "description": "summary 只返回单行时间线（默认，先摸底）；full 返回逐条消息全文"},
                 "ids": {"type": "array", "items": {"type": "string"},
                         "description": "只取这些记录 id（本地引导页勾选结果）；缺省返回窗口内全部记录"},
             },
             "required": [],
         },
+        "annotations": _READ_ONLY,
     },
     {
         "name": "save_report",
+        "title": "保存报告",
         "description": (
             "把 AI 撰写好的报告正文落盘到 reports/ 目录"
             "（支持 md / docx / html；html 为自包含单文件，可直接分享）"
@@ -99,17 +122,21 @@ TOOLS: List[Dict[str, Any]] = [
             },
             "required": ["markdown"],
         },
+        "annotations": _WRITE_LOCAL,
     },
     {
         "name": "list_templates",
+        "title": "列出格式模板",
         "description": (
             "列出用户已学到的报告格式模板（由引导页「格式克隆」上传其过去的日报/周报样例学到）。"
             "pending_vision=true 表示样例是图片、本机未识图，需要你读图后调用 save_template 回填"
         ),
         "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "annotations": _READ_ONLY,
     },
     {
         "name": "get_format_spec",
+        "title": "读取格式规范",
         "description": (
             "取模板的「输出格式规范」文本：写报告前先调用它，然后严格照此排版。"
             "缺省取用户当前生效的模板（AIREREPORT_TEMPLATE 或最新一份）"
@@ -122,9 +149,11 @@ TOOLS: List[Dict[str, Any]] = [
             },
             "required": [],
         },
+        "annotations": _READ_ONLY,
     },
     {
         "name": "save_template",
+        "title": "保存格式模板",
         "description": (
             "保存/回填一个格式模板（读图后把看到的排版结构写回）。"
             "features 只描述结构，不要写样例里的具体工作内容。"
@@ -172,11 +201,9 @@ TOOLS: List[Dict[str, Any]] = [
             },
             "required": ["name", "features"],
         },
+        "annotations": _WRITE_LOCAL,
     },
 ]
-
-_ERR_TAIL = "\n\n（本报告为“任务列表级”汇总：本地仅存会话元数据，正文在云端。）"
-
 
 def _tool_list_sources(_args: Dict[str, Any]) -> str:
     data = [
@@ -211,15 +238,19 @@ def _tool_generate_report(args: Dict[str, Any]) -> str:
     synth = ReportSynthesizer() if args.get("polish") else None
     # 排版由 generator 负责；polish 时模型只改写文字，校验不过自动退回草稿
     md, _err = polish_outline(outline, None, synth)
+    fmt = args.get("format") or "md"
 
     if args.get("save"):
-        path = _save(md, mode, args)
-        return f"报告已保存：{path}\n\n{md}"
-    return md + _ERR_TAIL
+        path = _save(md, fmt, mode, args)
+        if fmt == "md":
+            return f"报告已保存：{path}\n\n{md}"
+        return f"报告已保存：{path}（{fmt.upper()}）"
+    return md
 
 
-def _save(md: str, mode: str, args: Dict[str, Any]) -> Path:
+def _save(md: str, fmt: str, mode: str, args: Dict[str, Any]) -> Path:
     from ai_report import config
+    fmt = fmt if fmt in ("md", "docx", "html") else "md"
     day = args.get("date") or now_bj().strftime("%Y-%m-%d")
     if mode == "weekly":
         name = f"AI周报_{day}"
@@ -227,8 +258,15 @@ def _save(md: str, mode: str, args: Dict[str, Any]) -> Path:
         name = f"AI报告_{args.get('start')}_{args.get('end')}"
     else:
         name = f"AI日报_{day}"
-    path = config.ensure_reports_dir() / f"{name}.md"
-    path.write_text(md if md.endswith("\n") else md + "\n", encoding="utf-8")
+    path = config.ensure_reports_dir() / f"{name}.{fmt}"
+    if fmt == "docx":
+        from ai_report.docx import write_docx
+        write_docx(md, path)
+    elif fmt == "html":
+        from ai_report.html import write_html
+        write_html(md, path)
+    else:
+        path.write_text(md if md.endswith("\n") else md + "\n", encoding="utf-8")
     return path
 
 
@@ -238,7 +276,7 @@ def _tool_get_conversations(args: Dict[str, Any]) -> str:
 
     recs = index.select_records(args.get("mode") or "daily", args.get("date"),
                                 args.get("start"), args.get("end"))
-    payload = index.records_payload(recs, detail=args.get("detail") or "full",
+    payload = index.records_payload(recs, detail=args.get("detail") or "summary",
                                     project=args.get("project"),
                                     ids=args.get("ids"))
     payload["range"] = {k: args.get(k) for k in ("mode", "date", "start", "end")}
@@ -339,6 +377,7 @@ def dispatch(method: str, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             "protocolVersion": requested or SUPPORTED_PROTOCOLS[0],
             "capabilities": {"tools": {}},
             "serverInfo": SERVER_INFO,
+            "instructions": INSTRUCTIONS,
         }}
     if method == "ping":
         return {"result": {}}
@@ -348,8 +387,7 @@ def dispatch(method: str, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         name = params.get("name")
         args = params.get("arguments") or {}
         if name == "list_sources":
-            return {"result": {"content": [{"type": "text",
-                                            "text": _tool_list_sources(args)}]}}
+            return _call_tool(_tool_list_sources, args)
         if name == "generate_report":
             return _call_tool(_tool_generate_report, args)
         if name == "get_conversations":
@@ -376,7 +414,12 @@ def _make_response(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return {"jsonrpc": "2.0", "id": req.get("id"),
                 "error": {"code": -32600, "message": "无效请求"}}
     is_notification = "id" not in req
-    out = dispatch(req.get("method", ""), req.get("params"))
+    try:
+        out = dispatch(req.get("method", ""), req.get("params"))
+    except Exception as exc:  # noqa: BLE001 - 单条请求失败不能打断 stdio 循环
+        log(f"[MCP] {req.get('method')} 处理失败：{type(exc).__name__}: {exc}")
+        out = {"error": {"code": -32603,
+                         "message": f"内部错误：{type(exc).__name__}: {exc}"}}
     if is_notification:
         return None
     resp = {"jsonrpc": "2.0", "id": req["id"]}
@@ -387,11 +430,23 @@ def _make_response(req: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return resp
 
 
+def _force_utf8(stream: TextIO) -> None:
+    """把真实控制台流切到 UTF-8；注入的测试流没有 reconfigure 就跳过。"""
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        pass
+
+
 def serve_stdio(in_stream: Optional[TextIO] = None,
                 out_stream: Optional[TextIO] = None) -> None:
     """标准 MCP stdio 循环：逐行读 JSON-RPC，逐行写响应（可注入流便于测试）。"""
     stdin = in_stream or sys.stdin
     stdout = out_stream or sys.stdout
+    if in_stream is None:
+        _force_utf8(stdin)
+        _force_utf8(stdout)
+        _force_utf8(sys.stderr)
     log("[MCP] stdio 模式已启动（日志走 stderr，协议走 stdout）")
     for line in stdin:
         # 容错：部分客户端会写入 UTF-8 BOM / CRLF 行尾
@@ -408,7 +463,14 @@ def serve_stdio(in_stream: Optional[TextIO] = None,
         # 支持批量请求（JSON 数组）
         if isinstance(req, list):
             for item in req:
-                r = _make_response(item) if isinstance(item, dict) else None
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    r = _make_response(item)
+                except Exception as exc:  # noqa: BLE001
+                    r = {"jsonrpc": "2.0", "id": item.get("id"),
+                         "error": {"code": -32603,
+                                   "message": f"内部错误：{type(exc).__name__}: {exc}"}}
                 if r is not None:
                     _emit(stdout, r)
             continue
@@ -432,7 +494,12 @@ def _http_dispatch(method: str, params: Optional[Dict[str, Any]]) -> Dict[str, A
 
 def serve(port: int = 5070) -> None:
     """启动本地 HTTP 服务（只监听 127.0.0.1，数据不出本机）。"""
+    import os
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import urlparse
+
+    token = (os.environ.get("AIREREPORT_HTTP_TOKEN") or "").strip()
+    loopback = ("127.0.0.1", "localhost", "::1")
 
     class _Handler(BaseHTTPRequestHandler):
         def _send(self, code: int, payload: dict) -> None:
@@ -440,29 +507,80 @@ def serve(port: int = 5070) -> None:
             self.send_response(code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
 
+        def _trusted(self) -> bool:
+            """挡 DNS rebinding / 跨站请求：Host 与 Origin 必须是回环地址。"""
+            host = (self.headers.get("Host") or "").strip()
+            if host.startswith("["):
+                host_name = host[1:host.find("]")] if "]" in host else host
+            else:
+                host_name = host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+            if host_name.lower() not in loopback:
+                return False
+            origin = self.headers.get("Origin")
+            if origin:
+                parsed = urlparse(origin)
+                if (parsed.hostname or "").lower() not in loopback:
+                    return False
+            return True
+
+        def _authorized(self) -> bool:
+            if not token:
+                return True
+            return self.headers.get("Authorization", "") == f"Bearer {token}"
+
         def do_GET(self):  # noqa: N802
+            if not self._trusted():
+                self._send(403, {"error": "forbidden host/origin"})
+                return
             if self.path == "/health":
                 self._send(200, {"status": "ok", "server": SERVER_INFO["name"]})
             else:
                 self._send(404, {"error": "not found"})
 
         def do_POST(self):  # noqa: N802
+            if not self._trusted():
+                self._send(403, {"error": "forbidden host/origin"})
+                return
             if self.path != "/mcp":
                 self._send(404, {"error": "not found"})
+                return
+            if not self._authorized():
+                self._send(401, {"error": "unauthorized"})
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 req = json.loads(self.rfile.read(length).decode("utf-8"))
                 if isinstance(req, list):
-                    self._send(200, [_make_response(r) or {} for r in req])
+                    responses = [r for r in (_make_response(x) if isinstance(x, dict)
+                                             else None for x in req) if r is not None]
+                    if not responses:
+                        self.send_response(204)
+                        self.send_header("Content-Length", "0")
+                        self.end_headers()
+                        return
+                    self._send(200, responses)
                     return
-                self._send(200, _make_response(req) or {})
+                if not isinstance(req, dict):
+                    self._send(400, {"jsonrpc": "2.0", "id": None, "error": {
+                        "code": -32600, "message": "无效请求"}})
+                    return
+                resp = _make_response(req)
+                if resp is None:
+                    self.send_response(204)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                self._send(200, resp)
             except (json.JSONDecodeError, ValueError) as exc:
                 self._send(400, {"jsonrpc": "2.0", "error": {
                     "code": -32700, "message": f"解析失败：{exc}"}})
+            except Exception as exc:  # noqa: BLE001 - 单请求失败不拖垮 HTTP 服务
+                self._send(500, {"jsonrpc": "2.0", "error": {
+                    "code": -32603, "message": f"内部错误：{type(exc).__name__}: {exc}"}})
 
         def log_message(self, fmt, *args):
             pass
@@ -470,6 +588,8 @@ def serve(port: int = 5070) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", port), _Handler)
     log(f"[MCP] HTTP 已启动：http://127.0.0.1:{port}/mcp（健康检查 /health）")
     print(f"MCP HTTP 服务运行中：http://127.0.0.1:{port}/mcp（Ctrl+C 停止）")
+    if token:
+        log("[MCP] HTTP 已启用 Bearer Token 校验（AIREREPORT_HTTP_TOKEN）")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -479,6 +599,11 @@ def serve(port: int = 5070) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except (AttributeError, ValueError):
+            pass
     parser = argparse.ArgumentParser(description="aireport MCP server")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--stdio", action="store_true",

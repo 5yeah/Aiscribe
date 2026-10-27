@@ -15,6 +15,12 @@ trims.json
 # ---- 学到的格式模板与样例（含个人历史日报，绝不入库）----
 templates/
 
+# ---- DSH 插件构建产物（sidecar 由 CI/本机生成，不提交二进制）----
+dsh-plugin/runtime/
+dsh-plugin/node_modules/
+dsh-plugin/*.tgz
+node_modules/
+
 # ---- Python ----
 __pycache__/
 *.py[cod]
@@ -33,4 +39,5 @@ venv/
 # ---- IDE / 工具产物（分享包、缓存等）----
 .trae-html-share-packages/
 .trae/
+.qoder/
 *.zip

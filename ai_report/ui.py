@@ -264,8 +264,8 @@ def generate_report(ids: List[str], mode: str = "daily",
     与 CLI 的 daily / weekly / range 走同一条渲染与落盘链路，所以同一天在引导页
     与命令行生成的报告内容、文件名一致，差别只在素材按引导页的勾选做了裁剪。
 
-    时间剪辑在这里真实生效：窗口外的片段已从 summary 里丢弃，窗口内一条不剩的
-    记录直接不出现在报告里（与 records_payload 的 `trimmed_out` 语义一致）。
+    时间剪辑在这里真实生效：窗口外的片段已从 summary 和 raw["messages"] 里丢弃，
+    窗口内一条不剩的记录直接不出现在报告里（与 records_payload 的 `trimmed_out` 语义一致）。
 
     polish=True 时再把骨架交给 LLM 归纳一次（同一套「骨架 + 槽位」链路，等价于
     CLI 的 `--llm`）：**排版仍由本机 generator 负责**，模型只被允许改写条目的
@@ -285,7 +285,20 @@ def generate_report(ids: List[str], mode: str = "daily",
         win = trims.get(rid)
         if win:
             rec.summary = trimmer.clip_text(rec.summary or "", win["start"], win["end"])
-            if not rec.summary.strip():
+            raw = rec.raw if isinstance(rec.raw, dict) else {}
+            msgs = raw.get("messages")
+            if isinstance(msgs, list):
+                # generator 的 assistant 提示直接读 raw["messages"]，这里必须同步裁剪，
+                # 否则窗口外的 AI 正文仍会进入报告。
+                kept_msgs = trimmer.clip_messages(msgs, win["start"], win["end"])
+                raw["messages"] = kept_msgs
+            else:
+                kept_msgs = []
+            has_message = any(
+                str(m.get("text") or "").strip()
+                for m in kept_msgs if isinstance(m, dict)
+            )
+            if not rec.summary.strip() and not has_message:
                 continue  # 窗口内一条不剩 → 等同未勾选
         picked.append(rec)
 

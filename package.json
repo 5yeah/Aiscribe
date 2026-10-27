@@ -1,0 +1,50 @@
+{
+  "name": "dsh-aireport",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aiscribe — local-first AI session reports for DSH. The publishable npm package lives in dsh-plugin/.",
+  "type": "module",
+  "main": "./dsh-plugin/index.js",
+  "icon": "./dsh-plugin/icon.svg",
+  "exports": {
+    ".": "./dsh-plugin/index.js",
+    "./locale/*.json": "./dsh-plugin/locale/*.json",
+    "./icon": "./dsh-plugin/icon.svg",
+    "./cordis.patch.yml": "./dsh-plugin/cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "license": "MIT",
+  "author": "Aiscribe contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/5yeah/Aiscribe.git"
+  },
+  "homepage": "https://github.com/5yeah/Aiscribe/tree/main/dsh-plugin",
+  "bugs": {
+    "url": "https://github.com/5yeah/Aiscribe/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "mcp",
+    "aireport",
+    "report",
+    "local-first"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.0-0 <0.3.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-mcp-client": ">=0.2.0-0 <0.3.0"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./dsh-plugin/cordis.patch.yml"
+    }
+  }
+}

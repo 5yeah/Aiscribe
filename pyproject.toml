@@ -23,6 +23,14 @@ classifiers = [
 dependencies = []
 authors = [{ name = "Aiscribe contributors" }]
 
+[project.optional-dependencies]
+# Codex / dsh 的 .zstd 会话需要；不装时自动退化为只读元数据
+zstd = ["zstandard>=0.19"]
+
+[project.urls]
+Homepage = "https://github.com/5yeah/Aiscribe"
+Issues = "https://github.com/5yeah/Aiscribe/issues"
+
 [project.scripts]
 aireport = "ai_report.cli:main"
 

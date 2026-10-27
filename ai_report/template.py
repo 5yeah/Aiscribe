@@ -7,7 +7,7 @@
 - 图片样例本机无法解析（不引入 OCR 依赖）：只存档，并把「请 AI 读图后回填」的指令交给宿主 AI，
   由它通过 MCP 的 save_template 回填；文本与 docx 样例可直接本机推断
 
-存储位置：环境变量 AIREREPORT_TEMPLATES_DIR > <仓库根>/templates
+存储位置：环境变量 AIREREPORT_TEMPLATES_DIR > <数据目录>/templates
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ class TemplateError(ValueError):
 def templates_dir() -> Path:
     """模板存储目录（环境变量可覆盖），不存在则创建。"""
     env = os.environ.get(TEMPLATES_ENV)
-    base = Path(env) if env else (config.ROOT_DIR / "templates")
+    base = Path(env) if env else (config.data_dir() / "templates")
     base.mkdir(parents=True, exist_ok=True)
     return base
 

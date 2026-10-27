@@ -7,13 +7,14 @@
 校验通过才由 generator 重新渲染成 Markdown，不过就如实退回纯模板草稿。
 
 隐私约定：
-- 只把骨架文本（已是本地汇总结果）发往 LLM，绝不传原始对话
+- 只把骨架文本（本地汇总的当日摘要，有 assistant 正文时附最多 120 字结论片段）
+  发往 LLM；不发送完整原始对话
 - 无 API Key 或请求失败 → 原样退回模板草稿并如实记 last_error，绝不中断流程
 
 Key 与模型从哪来（优先级从高到低）：
 1. 函数参数（`api_key=` / `model=`）
 2. 环境变量：`LLM_PROVIDER` / `LLM_MODEL` / `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`
-3. 本地配置文件 `llm.json`（`AIREREPORT_LLM_FILE` 可覆盖；默认 `<仓库根>/llm.json`
+3. 本地配置文件 `llm.json`（`AIREREPORT_LLM_FILE` 可覆盖；默认 `<数据目录>/llm.json`
    或 `~/.aireport/llm.json`，已 gitignore），形如
    `{"provider": "deepseek", "model": "deepseek-chat", "api_key": "sk-..."}`
 """
@@ -95,12 +96,12 @@ DRAFT_LEAD = ("以下是由本机工具拼装的原始骨架（含未整理的�
 
 
 def llm_file() -> Optional[Path]:
-    """本地配置文件位置：环境变量 > 仓库根 llm.json > ~/.aireport/llm.json。"""
+    """本地配置文件位置：环境变量 > 数据目录 llm.json > ~/.aireport/llm.json。"""
     env = os.environ.get(LLM_FILE_ENV)
     if env:
         return Path(env)
-    for candidate in (config.ROOT_DIR / "llm.json",
-                      Path.home() / ".aireport" / "llm.json"):
+    for base in config.config_dirs():
+        candidate = base / "llm.json"
         if candidate.is_file():
             return candidate
     return None

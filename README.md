@@ -42,8 +42,11 @@ Aiscribe does it differently:
   library alone, no `pip install` needed. The one exception is the **guide page frontend**: `ui.py`'s server is
   still stdlib, but the page pulls Tailwind / React / Framer Motion from a public CDN, so the first load needs
   internet. Offline it shows an explicit notice instead of a blank page and points you at the CLI or MCP.
-  Your data never leaves the machine either way.
+  Session data stays local while it is read, filtered and laid out; only when you opt into AI polish or
+  ask a cloud model to read full sessions does that text enter the model context.
 - **Any MCP client** — stdio transport; TRAE, Claude Code, Cursor, dsh all work
+- **One-step DSH install** — install `dsh-aireport` from the DSH plugin market; the package bundles a
+  Windows sidecar, so no Python install is required (source and standalone MCP setups still work)
 - **Local guide page** — `python -m ai_report ui` serves a loopback-only **six-screen wizard**: splash → ① per-source real scan → ② date / week / custom range → ③ pick sessions by project (with time trimming) → ④ template and output format → generating screen → **generate the report on the spot** (template-only, written straight into `reports/`) or copy a ready-to-paste instruction for your AI
 - **Time trimming** — set a start/end per session in the guide page; segments outside the window are dropped
   by the tool itself (not by a prompt hint), so they can never leak into the report
@@ -53,7 +56,7 @@ Aiscribe does it differently:
 
 ```powershell
 # 0) Python 3.9+, no pip install needed
-git clone https://github.com/<you>/Aiscribe.git
+git clone https://github.com/5yeah/Aiscribe.git
 cd Aiscribe
 
 # 1) See which data sources were auto-discovered on this machine
@@ -68,6 +71,18 @@ python -m ai_report ui
 
 # 4) Or wire the MCP server + Skill into your AI client
 ```
+
+#### DSH plugin (no Python required)
+
+Search for **Aiscribe** (`dsh-aireport`) in the DSH 0.2.x plugin market and install it, then **start a
+new session**. Or use the CLI:
+
+```bash
+dsh plugin --profile web add dsh-aireport
+```
+
+`0.1.0` bundles a **Windows x64** runtime only; macOS/Linux builds will ship as separate platform
+packages. Reports and config live in `~/.aireport/`. See [`dsh-plugin/README.md`](dsh-plugin/README.md).
 
 ### Local guide page
 
@@ -86,10 +101,11 @@ untick never reaches the AI; each session can also be cut to a time window with 
 
 The generating screen offers two ways out, pick either:
 
-- **Generate report (runs AI summarisation by default)** — render a draft locally from a template,
-  filtered by your ticks and trims, then hand the **draft text** to the summarisation engine below
-  and write the result into `reports/`. The page shows the file name, path and open/download links,
-  and states plainly whether the body was summarised or is still the raw template draft.
+- **Generate report (local template by default)** — render and write the report into `reports/` locally,
+  filtered by your ticks and trims. Only if you **manually tick “AI polish”** and have an engine
+  configured does the **draft text** (daily summaries plus, when available, up to 120 chars of the AI
+  reply — not the full transcript) go to the model. The page states plainly whether the body was
+  summarised or is still the raw template draft.
   **With no engine configured it does not pretend to summarise** — it falls back and says why.
 - **Copy instruction** — paste the generated instruction (carrying the record ids you selected and the
   format spec) into your AI chat; the AI reads the raw sessions and summarises, which gives **the best
@@ -110,8 +126,9 @@ The wizard only shows the material for the day you picked. To browse **all** his
 ### Summarisation engine (optional)
 
 Summarisation only happens on the *already-collapsed draft* level: the draft is locally assembled
-(e.g. CodeBuddy CN's real input timeline for the day, each entry capped at 400 chars). It contains
-**no AI replies and is not the full transcript**, but it does contain fragments of your own input.
+(e.g. CodeBuddy CN's real input timeline for the day, each entry capped at 400 chars) and may append
+up to 120 chars of the assistant's conclusion when one exists. It is **not the full transcript**, but
+it does contain fragments of your own input — decide accordingly before enabling it.
 Configure it via a gitignored `llm.json` or the matching environment variables:
 
 ```json
@@ -131,7 +148,8 @@ A long session often mixes yesterday's leftovers with today's work. Open the gui
 The preview and the material handed to the AI stay in sync, and a `已剪辑` badge marks the chip
 (`清空全部剪辑` undoes everything). Times are Beijing time; an end earlier than the start means an
 overnight window (e.g. `22:30 ~ 02:00`); segments without a timestamp are always kept.
-Trims live in `<repo>/trims.json` (override with `AIREREPORT_TRIMS`, gitignored).
+Trims live in `<data dir>/trims.json` (the repo root when running from source, `~/.aireport` when
+installed; override with `AIREREPORT_TRIMS`, gitignored).
 
 ### Format cloning (reproduce the report layout you already use)
 
@@ -284,10 +302,11 @@ and each can be overridden by an environment variable (see `python -m ai_report 
 
 | Env var | Purpose | Default |
 |---|---|---|
-| `AIREREPORT_REPORTS_DIR` | Report output directory | `<repo>/reports` |
-| `AIREREPORT_TEMPLATES_DIR` | Learned format templates directory | `<repo>/templates` |
+| `AIREREPORT_HOME` | Data directory (reports, templates, config, trims) | repo root from source; `~/.aireport` when installed |
+| `AIREREPORT_REPORTS_DIR` | Report output directory | `<data dir>/reports` |
+| `AIREREPORT_TEMPLATES_DIR` | Learned format templates directory | `<data dir>/templates` |
 | `AIREREPORT_TEMPLATE` | Default active format template | newest learned template |
-| `AIREREPORT_TRIMS` | Session time-trim file | `<repo>/trims.json` |
+| `AIREREPORT_TRIMS` | Session time-trim file | `<data dir>/trims.json` |
 | `AIREREPORT_PROJECTS` | Project classification rules | `<repo>/projects.json`, then `~/.aireport/projects.json`, then built-ins + cwd fallback |
 | `CODEBUDDY_CN_DB` … `VSCODE_GLOBAL_STORAGE` | Override a source path (multi-dir values use `;`) | Auto-discovered |
 | `AIREREPORT_SCAN_ALL_USERS` | Set `1` to also read **other Windows users'** session dirs on this machine | Off — other people's sessions are not read by default |
@@ -297,11 +316,16 @@ Copy [`projects.example.json`](projects.example.json) to `projects.json` to pin 
 
 ## Privacy
 
-- Everything is read from local files only; connectors never go online or upload anything
+- Connectors read local files only and never go online; Aiscribe has no telemetry and does not upload
+  sessions on its own
+- **Tool output enters the model context.** When a cloud model drives the report through MCP,
+  `get_conversations(detail="full")` is effectively sending those transcripts to that model provider.
+  The server tells models to start with `detail="summary"` and to read only the projects/dates needed
 - Only the **current user's** directories are read; other users on the same machine require
   `AIREREPORT_SCAN_ALL_USERS=1`
-- Only the **finished report text** (no raw conversations) can reach an LLM endpoint, and only when
-  you explicitly pass `--llm`
+- Only the **skeleton draft** (summaries, plus up to 120 chars of assistant text when available) goes to
+  a configured LLM endpoint, and only when you opt into AI polish (`--llm` / UI tick / `polish=true`).
+  The full raw transcript is not sent by the summariser itself
 - Reports stay in local `reports/`; both the optional HTTP mode and the guide page bind to `127.0.0.1` only
 - The guide/browse pages validate `Host` and `Origin` and reject anything that is not a loopback,
   same-origin request — this blocks DNS rebinding (a domain pointed at 127.0.0.1 driving your local port)

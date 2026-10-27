@@ -17,6 +17,7 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(out["result"]["protocolVersion"], "2025-06-18")
         self.assertEqual(out["result"]["serverInfo"]["name"], "aireport")
         self.assertIn("tools", out["result"]["capabilities"])
+        self.assertIn("云端模型", out["result"]["instructions"])
 
     def test_initialize_echoes_any_client_version(self):
         # 无条件 echo：严格校验的客户端必然支持自己声明的版本，避免断开
@@ -40,8 +41,12 @@ class TestDispatch(unittest.TestCase):
         schema = by_name["generate_report"]["inputSchema"]
         self.assertIn("mode", schema["properties"])
         self.assertIn("range", schema["properties"]["mode"]["enum"])
-        # 素材接口：供 AI 归纳用
-        self.assertIn("detail", by_name["get_conversations"]["inputSchema"]["properties"])
+        self.assertIn("html", schema["properties"]["format"]["enum"])
+        self.assertTrue(by_name["list_sources"]["annotations"]["readOnlyHint"])
+        # 素材接口：供 AI 归纳用；默认先摘要，避免一次性把全文灌进上下文
+        detail = by_name["get_conversations"]["inputSchema"]["properties"]["detail"]
+        self.assertEqual(detail["default"], "summary")
+        self.assertTrue(by_name["get_conversations"]["annotations"]["readOnlyHint"])
         self.assertIn("markdown",
                       by_name["save_report"]["inputSchema"]["properties"])
         self.assertEqual(by_name["save_report"]["inputSchema"]["required"],
@@ -71,6 +76,27 @@ class TestDispatch(unittest.TestCase):
         self.assertFalse(out["result"]["isError"])
         text = out["result"]["content"][0]["text"]
         self.assertIn("# AI 日报 2026-10-09", text)
+
+    def test_get_conversations_defaults_to_summary(self):
+        """不传 detail 时只回摘要，避免默认把全文灌进模型上下文。"""
+        from ai_report.models import UnifiedRecord
+        from ai_report import index as idx
+
+        rec = UnifiedRecord(
+            source="TRAE", session_id="t:summary", title="标题", project="",
+            status="completed", cwd="D:/demo",
+            start_ts=1792022400.0, end_ts=1792026000.0,
+            summary="做了一件事", raw={"messages": [{"ts": 1792022400.0, "text": "全文"}]},
+        )
+        with mock.patch.object(idx, "select_records", return_value=[rec]):
+            out = dispatch("tools/call", {
+                "name": "get_conversations",
+                "arguments": {"mode": "daily", "date": "2026-10-16"},
+            })
+        payload = json.loads(out["result"]["content"][0]["text"])
+        entry = payload["projects"][0]["records"][0]
+        self.assertIn("summary", entry)
+        self.assertNotIn("messages", entry)
 
     def test_call_generate_report_range_requires_dates(self):
         out = dispatch("tools/call", {
@@ -106,6 +132,23 @@ class TestDispatch(unittest.TestCase):
             "arguments": {"markdown": "# x", "format": "pdf"}})
         self.assertTrue(out["result"]["isError"])
 
+    def test_generate_report_honours_format(self):
+        outline = {"title": "t", "sources": "", "sections": []}
+        with tempfile.TemporaryDirectory() as d:
+            with mock.patch.object(config, "ensure_reports_dir",
+                                   return_value=Path(d)), \
+                 mock.patch("ai_report.mcp_server.generator.outline_daily",
+                            return_value=outline):
+                out = dispatch("tools/call", {
+                    "name": "generate_report",
+                    "arguments": {"mode": "daily", "date": "2026-10-16",
+                                  "format": "html", "save": True},
+                })
+            self.assertFalse(out["result"]["isError"])
+            text = out["result"]["content"][0]["text"]
+            self.assertIn("AI日报_2026-10-16.html", text)
+            self.assertTrue((Path(d) / "AI日报_2026-10-16.html").is_file())
+
 
 class TestMakeResponse(unittest.TestCase):
     def test_notification_gets_no_response(self):
@@ -121,6 +164,20 @@ class TestMakeResponse(unittest.TestCase):
     def test_missing_method(self):
         resp = _make_response({"jsonrpc": "2.0", "id": 3})
         self.assertIn("error", resp)
+
+    def test_tool_exception_is_isolated(self):
+        """单个工具抛异常只影响这一条请求，stdio 循环还能继续。"""
+        with mock.patch("ai_report.mcp_server._tool_list_sources",
+                        side_effect=RuntimeError("boom")):
+            resp = _make_response({"jsonrpc": "2.0", "id": 8, "method": "tools/call",
+                                   "params": {"name": "list_sources",
+                                              "arguments": {}}})
+        self.assertEqual(resp["id"], 8)
+        # 工具异常按 MCP 约定放进 result.isError，而不是 JSON-RPC error
+        self.assertTrue(resp["result"]["isError"])
+        self.assertIn("boom", resp["result"]["content"][0]["text"])
+        nxt = _make_response({"jsonrpc": "2.0", "id": 9, "method": "ping"})
+        self.assertEqual(nxt["result"], {})
 
 
 class TestServeStdio(unittest.TestCase):

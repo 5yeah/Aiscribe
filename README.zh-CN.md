@@ -35,8 +35,10 @@ Aiscribe 的做法是：
   不过就退回纯模板，绝不中断
 - **零三方依赖（内核）**：取数 / 报告生成 / MCP 只跑 Python 标准库，不需要 `pip install` 任何东西。
   例外只有**本地引导页的前端**：`ui.py` 的服务端仍是标准库，但页面的界面库（Tailwind / React / Framer Motion）走公网 CDN，
-  **首次打开需要联网**；断网时页面不会白屏，会显示一句明确的提示并告诉你改用 CLI 或 MCP。数据本身从头到尾不出本机。
-- **跨客户端**：MCP 用 stdio transport，TRAE / Claude Code / Cursor / dsh 都能接
+  **首次打开需要联网**；断网时页面不会白屏，会显示一句明确的提示并告诉你改用 CLI 或 MCP。
+  会话数据本身只在读取、筛选、排版时留在本机；只有你手动勾选 AI 归纳或让云端模型读取全文时，相应文本才会进入模型上下文。
+- **跨客户端**：MCP 用 stdio transport，TRAE / Claude Code / Cursor / dsh 都能接；DSH 用户可直接从插件市场安装 `dsh-aireport`（包内自带 Windows sidecar，无需装 Python）
+- **装进 DSH 即用**：插件自带运行时与 MCP 桥接，安装后 agent 直接获得 7 个工具；源码运行与独立 MCP 配置仍然保留
 - **本地引导页**：`python -m ai_report ui` 打开一个只监听回环地址的**六屏向导** —— 启动屏 → ① 逐源真实扫描点亮 → ② 日期 / 周报 / 自定义区间 → ③ 按项目勾选素材（含时间剪辑）→ ④ 模板与输出格式 → 生成等待页 → **一键生成报告**（本机纯模板，直接写进 `reports/`）或复制「交给 AI 的指令」
 - **时间剪辑**：在引导页给单条素材设起止时间，窗口外的对话片段**由工具直接丢弃**（不是靠提示词提醒 AI），因而不可能混进报告
 - **格式克隆**：上传你以前一直用的日报（md / txt / docx / 图片）→ 本机抽出排版结构存成模板 → 之后每份报告都复现你原来的格式（只学排版，不搬内容）
@@ -45,7 +47,7 @@ Aiscribe 的做法是：
 
 ```powershell
 # 0) 需要 Python 3.9+（无需任何三方包）
-git clone https://github.com/<you>/Aiscribe.git
+git clone https://github.com/5yeah/Aiscribe.git
 cd Aiscribe
 
 # 1) 看本机发现了哪些数据源（自动发现路径，不用改代码）
@@ -60,6 +62,19 @@ python -m ai_report ui
 
 # 3b) 或把 MCP 接进你的 AI 工具，让它按 Skill 生成（见下）
 ```
+
+#### 装进 DSH（插件市场，免 Python）
+
+在 DSH 0.2.x 的插件市场搜索 **Aiscribe**（包名 `dsh-aireport`）并安装，然后**新开会话**；
+也可以用命令行：
+
+```bash
+dsh plugin --profile web add dsh-aireport
+```
+
+当前 `0.1.0` 只随包提供 **Windows x64** 运行时，其他平台会以独立平台包发布。
+插件不依赖系统 Python；报告与配置写到 `~/.aireport/`。详见
+[`dsh-plugin/README.md`](dsh-plugin/README.md)。
 
 ### 本地引导页（最直观的用法）
 
@@ -77,9 +92,10 @@ python -m ai_report ui --port 5080 --no-open
 
 等待页有两条产出路径，任选：
 
-- **生成报告（默认走 AI 归纳）** — 先在本机按你的勾选与剪辑过滤素材、用模板渲染成草稿，
-  再把**草稿文本**交给归纳引擎（见下）整理成内容级摘要，写进 `reports/`；
-  页面给出文件名、路径与打开/下载链接，并明确标注「正文已由 xxx 归纳」还是「未归纳，仍是草稿」。
+- **生成报告（默认本机纯模板）** — 先在本机按你的勾选与剪辑过滤素材、用模板渲染，直接写进 `reports/`；
+  页面给出文件名、路径与打开/下载链接。只有你**手动勾选「AI 归纳」**且配置了归纳引擎时，
+  才会把**草稿文本**（当日摘要，有 AI 正文时附最多 120 字的结论片段，不是完整对话）交给模型改写；
+  页面会明确标注「正文已由 xxx 归纳」还是「未归纳，仍是草稿」。
   **未配置归纳引擎时不会假装归纳**，而是如实退回草稿并说明原因
 - **复制指令** — 把带 `ids` 与格式规范的指令贴进你的 AI 对话，由 AI 读原文归纳，**质量最高**；
   这种情况下的落盘由你的 AI 客户端调用 `save_report` 完成
@@ -99,7 +115,8 @@ python -m ai_report ui --port 5080 --no-open
 ### 归纳引擎（可选，不配也能用）
 
 归纳只发生在「已汇总草稿」这一层：草稿是本机拼接的摘要（例如 CodeBuddy CN 的当日真实输入时间线，
-每条上限 400 字），**不包含 AI 回复，也不是完整对话**，但其中确实含有你原始输入的片段。
+每条上限 400 字），有 assistant 正文时还会附上最多 120 字的结论片段。
+它**不是完整对话**，但其中确实含有你原始输入的片段——开启归纳前请确认可以接受这一点。
 `llm.json`（已 gitignore）或同名环境变量都可配置：
 
 ```json
@@ -117,7 +134,8 @@ python -m ai_report ui --port 5080 --no-open
 设「从 / 到」两个时间点：窗口外的对话片段**由工具自己丢掉** —— `get_conversations` 根本不会返回它，
 AI 也就没机会再写回报告。预览骨架与交给 AI 的素材同步生效，chip 上会打「已剪辑」标记，
 右上角的「清空全部剪辑」可一键撤销。时间为北京时间；「到」早于「从」按跨夜处理（如 `22:30 ~ 02:00`）；
-没有时间戳的片段一律保留。剪辑存在 `<仓库>/trims.json`（可用 `AIREREPORT_TRIMS` 覆盖，已 gitignore）。
+没有时间戳的片段一律保留。剪辑存在数据目录的 `trims.json`（源码运行时是仓库根，安装态是
+`~/.aireport`；可用 `AIREREPORT_TRIMS` 覆盖，已 gitignore）。
 
 ### 格式克隆（复现你原来的日报格式）
 
@@ -131,7 +149,7 @@ python -m ai_report daily --date 2026-10-16 --template 我的日报
 - **只抽结构**：标题行 / 头部信息行 / 项目行 / 事项行 / 待办段 / 收尾注 / 是否双版本，**不留样例里的具体工作内容**
 - **图片样例**：本机不做识图（保持零依赖），只存档并给出提示，让 AI 读图后用 MCP `save_template` 回填结构
 - **两种消费方式**：AI 路径（`get_format_spec` 把规范塞进提示词，主力）/ CLI 路径（`--template` 直接排版）
-- 模板存在 `templates/*.json`（可用 `AIREREPORT_TEMPLATES_DIR` 覆盖），已 gitignore；设置 `AIREREPORT_TEMPLATE` 可指定默认生效的那一份
+- 模板存在 `<数据目录>/templates/*.json`（可用 `AIREREPORT_TEMPLATES_DIR` 覆盖），已 gitignore；设置 `AIREREPORT_TEMPLATE` 可指定默认生效的那一份
 
 ### 接入 MCP + Skill（推荐用法）
 
@@ -285,7 +303,8 @@ Windows 一键脚本：[`scripts/run_daily.bat`](scripts/run_daily.bat) / [`scri
 | WorkBuddy | `~/.workbuddy/workbuddy.db` | 会话标题与时间（cwd 是它自己的工作区目录，分类靠标题） |
 | Kimi | `%APPDATA%/kimi-desktop/` | 元数据 + 被编辑文件路径（据此定位项目目录） |
 
-所有路径都基于 `%APPDATA%` / `%LOCALAPPDATA%` / 用户主目录**自动推导**，同一台机器多用户时还会兜底搜索其他用户目录；
+所有路径都基于 `%APPDATA%` / `%LOCALAPPDATA%` / 用户主目录**自动推导**；
+默认只扫描当前用户，同机其他用户的目录需要显式设 `AIREREPORT_SCAN_ALL_USERS=1`。
 每个路径都能用环境变量覆盖（见 `python -m ai_report config` 的输出）。
 装了哪个源就自动亮哪个，没装的显示 `missing`，不影响其它源。
 
@@ -299,10 +318,11 @@ zstd 解压、JSONL 读取、ISO 时间解析、正文块抽取、注入上下�
 
 | 环境变量 | 用途 | 缺失时行为 |
 |---|---|---|
-| `AIREREPORT_REPORTS_DIR` | 报告输出目录 | 默认 `<仓库>/reports` |
-| `AIREREPORT_TEMPLATES_DIR` | 格式模板存放目录 | 默认 `<仓库>/templates` |
+| `AIREREPORT_HOME` | 数据目录（报告 / 模板 / 配置 / 剪辑） | 源码运行时为仓库根；安装态或 sidecar 为 `~/.aireport` |
+| `AIREREPORT_REPORTS_DIR` | 报告输出目录 | 默认 `<数据目录>/reports` |
+| `AIREREPORT_TEMPLATES_DIR` | 格式模板存放目录 | 默认 `<数据目录>/templates` |
 | `AIREREPORT_TEMPLATE` | 默认生效的格式模板名 | 不设则用最新学到的模板 |
-| `AIREREPORT_TRIMS` | 引导页时间剪辑文件 | 默认 `<仓库>/trims.json` |
+| `AIREREPORT_TRIMS` | 引导页时间剪辑文件 | 默认 `<数据目录>/trims.json` |
 | `AIREREPORT_PROJECTS` | 项目分类规则文件 | 依次找 `<仓库>/projects.json`、`~/.aireport/projects.json`，都没有则用内置规则 + cwd 兜底 |
 | `CODEBUDDY_CN_DB` `WORKBUDDY_DB` `DOUBAO_IDB_DIR` `KIMI_DIR` `TRAE_ROOTS` `TRAE_MEMORY_DIR` `CODEX_DIR` `DSH_SESSIONS_DIR` `CLAUDE_CODE_DIR` `GEMINI_DIR` `QWEN_CODE_DIR` `IFLOW_DIR` `CURSOR_DB` `VSCODE_USER_DIRS` `VSCODE_GLOBAL_STORAGE` | 覆盖数据源路径（多目录型用 `;` 分隔） | 用自动发现的默认路径 |
 | `AIREREPORT_SCAN_ALL_USERS` | 设 `1` 才会读**同机其他 Windows 用户**的会话目录 | 默认关闭（别人的会话不该被默认读进来） |
@@ -313,9 +333,13 @@ zstd 解压、JSONL 读取、ISO 时间解析、正文块抽取、注入上下�
 
 ## 隐私声明
 
-- 所有会话数据**只在本机读取**，**绝不上传**；连接器不联网、不调用云端接口
+- 连接器**只读取本机文件、不联网**；Aiscribe 自身没有遥测，也不会主动上传会话
+- **但工具返回的内容会进入模型上下文**：用 MCP 让云端模型生成报告时，
+  `get_conversations(detail="full")` 的对话原文等同于发送给该模型提供商。
+  服务端已提示模型先用 `detail="summary"` 摸底，只读取与当前请求相关的项目与日期
 - 默认只读**当前用户**的目录；同机其他用户的会话要显式设 `AIREREPORT_SCAN_ALL_USERS=1` 才会碰
-- 只有**最终生成的报告文本**（已非原始对话）在用户主动开启 `--llm` 时才发往 LLM 端点
+- 只有用户主动开启 AI 归纳（UI 勾选 / `--llm` / `polish=true`）时，**骨架草稿文本**才会发往所配的 LLM 端点；
+  完整原始对话不会由归纳器直接发送
 - 报告只写到本地 `reports/`；MCP 的 HTTP 模式与引导页都只监听 `127.0.0.1`
 - 引导页/浏览页会校验 `Host` 与 `Origin`：只接受回环地址且同源的请求，挡掉 DNS rebinding
   （把域名解析到 127.0.0.1 再让网页打本地端口的攻击）

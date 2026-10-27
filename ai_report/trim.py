@@ -10,7 +10,8 @@
 - 只给一端时另一端按 `00:00` / `23:59` 补全
 - 逐条消息（`messages[].time`）同样按窗口过滤
 
-存储：`<仓库根>/trims.json`（环境变量 `AIREREPORT_TRIMS` 可覆盖；已 gitignore）。
+存储：`<数据目录>/trims.json`（环境变量 `AIREREPORT_TRIMS` 可覆盖；已 gitignore）。
+源码运行时数据目录是仓库根；安装态/sidecar 是 `~/.aireport`。
 键是记录稳定 id（`f"{source}|{session_id}"`），值是 `{"start": "HH:MM", "end": "HH:MM"}`。
 """
 
@@ -23,7 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ai_report import config
-from ai_report.utils import log
+from ai_report.utils import fmt_bj, log
 
 #: 剪辑文件位置的环境变量名
 TRIMS_FILE_ENV = "AIREREPORT_TRIMS"
@@ -37,9 +38,9 @@ _CLOCK_RE = re.compile(r"^\s*(\d{1,2}):(\d{2})(?::(\d{2}))?")
 
 
 def trims_file() -> Path:
-    """剪辑文件位置：环境变量 > 仓库根 trims.json。"""
+    """剪辑文件位置：环境变量 > 数据目录 trims.json。"""
     env = os.environ.get(TRIMS_FILE_ENV)
-    return Path(env) if env else config.ROOT_DIR / "trims.json"
+    return Path(env) if env else config.data_dir() / "trims.json"
 
 
 def normalize_time(value: Any) -> str:
@@ -110,6 +111,31 @@ def keep_time(hhmm: Any, start: str, end: str) -> bool:
         return True
     lo, hi = _bounds(start, end)
     return _in_window(minutes, lo, hi)
+
+
+def clip_messages(messages: List[Any], start: str, end: str) -> List[Any]:
+    """按窗口过滤逐条消息；时间戳解析不出的消息保留。
+
+    UI 的「时间剪辑」原先只裁 summary，generator 仍能从 raw["messages"] 取到
+    窗口外的 assistant 正文。这里对原始消息做同一套过滤，避免剪辑泄漏。
+    """
+    if not (start or end) or not isinstance(messages, list):
+        return messages
+    kept: List[Any] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            kept.append(msg)
+            continue
+        clock = None
+        ts = msg.get("ts")
+        if isinstance(ts, (int, float)) and ts > 0:
+            clock = fmt_bj(ts, "%H:%M")
+        elif msg.get("time"):
+            clock = str(msg.get("time"))
+        if clock and not keep_time(clock, start, end):
+            continue
+        kept.append(msg)
+    return kept
 
 
 # ---- 存取（trims.json）----

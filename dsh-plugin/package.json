@@ -1,21 +1,64 @@
 {
-  "name": "@local/aireport-mcp",
+  "name": "dsh-aireport",
   "version": "0.1.0",
-  "private": true,
+  "description": "Aiscribe — read local AI session history from 16 tools and generate daily/weekly work reports without leaving your machine. Windows sidecar bundled; no Python required.",
   "type": "module",
-  "description": "Connects Aiscribe's local MCP server so the agent can read AI session history and generate daily/weekly reports.",
-  "keywords": ["dsh", "dsh-plugin", "mcp", "aireport", "report"],
+  "main": "index.js",
+  "icon": "./icon.svg",
   "exports": {
+    ".": "./index.js",
     "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
   },
   "files": [
+    "index.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "third-party/**",
+    "runtime/**"
   ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "mcp",
+    "aireport",
+    "report",
+    "local-first"
+  ],
+  "license": "MIT",
+  "author": "Aiscribe contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/5yeah/Aiscribe.git",
+    "directory": "dsh-plugin"
+  },
+  "homepage": "https://github.com/5yeah/Aiscribe/tree/main/dsh-plugin",
+  "bugs": {
+    "url": "https://github.com/5yeah/Aiscribe/issues"
+  },
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.0-0 <0.3.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-mcp-client": ">=0.2.0-0 <0.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
     }

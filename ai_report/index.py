@@ -1,7 +1,7 @@
 """L2 统一索引与分类：合并、去重、分类、按日期过滤、JSON 导出。
 
 项目分类规则可外置：`projects.json`（见 projects.example.json）。
-查找顺序：环境变量 AIREREPORT_PROJECTS > <仓库根>/projects.json > ~/.aireport/projects.json；
+查找顺序：环境变量 AIREREPORT_PROJECTS > <数据目录>/projects.json > ~/.aireport/projects.json；
 都没有时用下面内置的默认规则，因此新项目也能靠 cwd 目录名兜底归类。
 """
 
@@ -52,13 +52,13 @@ _RULES: Optional[Tuple[List[Tuple[Tuple[str, ...], str]], Dict[str, str]]] = Non
 
 
 def projects_file() -> Optional[Path]:
-    """项目规则文件位置：环境变量 > 仓库根 projects.json > ~/.aireport/projects.json。"""
+    """项目规则文件位置：环境变量 > 数据目录 projects.json > ~/.aireport/projects.json。"""
     env = os.environ.get(PROJECTS_FILE_ENV)
     if env:
         return Path(env)
     from ai_report import config
-    for candidate in (config.ROOT_DIR / "projects.json",
-                      Path.home() / ".aireport" / "projects.json"):
+    for base in config.config_dirs():
+        candidate = base / "projects.json"
         if candidate.is_file():
             return candidate
     return None

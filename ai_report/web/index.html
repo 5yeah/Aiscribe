@@ -627,7 +627,7 @@ window.addEventListener('load', function () {
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center pb-3">
         <span className="liquid-glass c-muted pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs">
           <Lamp on={true} />
-          数据全程本机 · 只监听 127.0.0.1 · 不上传
+          数据默认只在本机 · 只监听 127.0.0.1 · 手动开启 AI 归纳才会发送材料草案
         </span>
       </div>
     );
@@ -1316,7 +1316,7 @@ window.addEventListener('load', function () {
     var genErr = st10[0], setGenErr = st10[1];
     var st11 = useState(null);
     var llmInfo = st11[0], setLlmInfo = st11[1];
-    var st12 = useState(true);
+    var st12 = useState(false);
     var useAi = st12[0], setUseAi = st12[1];
 
     var setStage = function (key, value) {
@@ -1376,7 +1376,7 @@ window.addEventListener('load', function () {
         return llmReady;
       }).then(function (info) {
         if (!alive) { return; }
-        runGenerate(!!info && info.ready);
+        runGenerate(false);
       }).catch(function (e) {
         if (!alive) { return; }
         setError(e.message || '生成失败');
@@ -1464,7 +1464,7 @@ window.addEventListener('load', function () {
             </h1>
           )}
           <p className="c-muted mt-4 text-sm font-body">
-            {stopped ? error : '全程本机读取，不上传任何内容。'}
+            {stopped ? error : '读取与排版都在本机；只有你手动勾选 AI 归纳时，材料草案才会发往所配的 LLM。'}
           </p>
           {stopped ? (
             <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
@@ -1548,7 +1548,8 @@ window.addEventListener('load', function () {
             </label>
 
             <p className="c-muted mt-3 text-xs font-body leading-relaxed">
-              「生成报告」在本机渲染并按上面的开关决定是否归纳，文件写进 reports/，只上传已汇总草稿、不上传原始对话；
+              「生成报告」默认在本机渲染、不联网；勾选 AI 归纳后，会把本机拼装的材料草案（含对话片段）
+              发给你配置的 LLM，但不发送完整会话文件。文件写进 reports/；
               「复制指令」交给你的 AI 客户端读原文归纳，质量更高 —— 那种情况下 md 由客户端落盘，
               {props.fmt === 'docx' ? 'Word' : props.fmt === 'html' ? '可分享 HTML' : 'md'} 需客户端调用 save_report 保存。
             </p>

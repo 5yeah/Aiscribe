@@ -6,12 +6,14 @@ import tempfile
 import threading
 import unittest
 import urllib.request
+from datetime import datetime
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
 from ai_report import index, trim, ui
 from ai_report.models import UnifiedRecord
+from ai_report.utils import BJ_TZ
 
 
 def _rec(source="CodeBuddy CN", session_id="cid:2026-10-16", title="新版部署确认"):
@@ -567,6 +569,29 @@ class TestGenerateRoutes(unittest.TestCase):
             self.assertEqual(resp.status, 200)
             self.assertIn("text/markdown", resp.headers["Content-Type"])
             self.assertIn("AI 日报", resp.read().decode("utf-8"))
+
+    def test_generate_clips_raw_messages_for_trim_window(self):
+        """时间剪辑要同时裁掉 raw["messages"]，否则 assistant 正文会绕过窗口进报告。"""
+        rec = _rec(source="TRAE", session_id="t:trim", title="剪辑测试")
+        rec.start_ts = datetime(2026, 10, 16, 9, 0, tzinfo=BJ_TZ).timestamp()
+        rec.end_ts = datetime(2026, 10, 16, 23, 30, tzinfo=BJ_TZ).timestamp()
+        rec.summary = "10:00 窗口内的事；23:00 窗口外的事"
+        rec.raw = {"messages": [
+            {"ts": datetime(2026, 10, 16, 10, 0, tzinfo=BJ_TZ).timestamp(),
+             "role": "assistant", "text": "窗口内的AI正文"},
+            {"ts": datetime(2026, 10, 16, 23, 0, tzinfo=BJ_TZ).timestamp(),
+             "role": "assistant", "text": "窗口外的AI正文"},
+        ]}
+        rid = index.record_id(rec)
+        with mock.patch.object(ui.index, "select_records", return_value=[rec]):
+            trim.set_trim(rid, "09:00", "18:00")
+            data = ui.generate_report(
+                [rid], mode="daily", date_value="2026-10-16", polish=False)
+        self.assertEqual(data["total"], 1)
+        self.assertIn("窗口内的事", data["text"])
+        self.assertIn("窗口内的AI正文", data["text"])
+        self.assertNotIn("窗口外的事", data["text"])
+        self.assertNotIn("窗口外的AI正文", data["text"])
 
     def test_report_route_rejects_path_traversal(self):
         with self.assertRaises(urllib.error.HTTPError) as ctx:

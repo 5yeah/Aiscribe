@@ -13,16 +13,46 @@ import os
 from pathlib import Path
 from typing import Dict, Iterable, List
 
-# ---- 包根目录（<repo>/ai_report 的上一级），报告默认写到 <根>/reports ----
+# ---- 包根目录（<repo>/ai_report 的上一级）----
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
-#: 报告输出目录的环境变量名（覆盖 <根>/reports）
+#: 数据目录环境变量：报告、模板、projects/llm/trims 都放在它下面
+ENV_HOME = "AIREREPORT_HOME"
+
+
+def is_dev_checkout() -> bool:
+    """当前是否从源码仓库运行（而不是 pip 安装或 PyInstaller 打包）。
+
+    只有源码仓库才把 reports/templates 等写回仓库根；安装态与 sidecar 必须写到
+    用户目录，否则会落进 site-packages 或 PyInstaller 的临时解压目录。
+    """
+    return (ROOT_DIR / "pyproject.toml").is_file() and (ROOT_DIR / "ai_report").is_dir()
+
+
+def data_dir() -> Path:
+    """用户数据目录：AIREREPORT_HOME > 源码仓库根 > ~/.aireport。"""
+    env = os.environ.get(ENV_HOME)
+    if env:
+        return Path(env).expanduser()
+    return ROOT_DIR if is_dev_checkout() else Path.home() / ".aireport"
+
+
+def config_dirs() -> List[Path]:
+    """配置文件搜索目录（去重、保持优先级）。"""
+    out = [data_dir()]
+    home = Path.home() / ".aireport"
+    if home not in out:
+        out.append(home)
+    return out
+
+
+#: 报告输出目录的环境变量名（覆盖 <数据目录>/reports）
 ENV_REPORTS_DIR = "AIREREPORT_REPORTS_DIR"
-REPORTS_DIR = Path(os.environ.get(ENV_REPORTS_DIR) or (ROOT_DIR / "reports"))
+REPORTS_DIR = Path(os.environ.get(ENV_REPORTS_DIR) or (data_dir() / "reports"))
 
 # ---- 钉钉配置文件位置（钉钉提交当前默认停用，模块保留）----
-DINGTALK_CONFIG_FILE = ROOT_DIR / "dingtalk_config.json"
-DINGTALK_CONFIG_EXAMPLE = ROOT_DIR / "dingtalk_config.example.json"
+DINGTALK_CONFIG_FILE = data_dir() / "dingtalk_config.json"
+DINGTALK_CONFIG_EXAMPLE = data_dir() / "dingtalk_config.example.json"
 
 # ---- 各数据源在“用户目录”下的相对位置（不含用户名，换机靠自动推导）----
 CODEBUDDY_CN_REL = ("CodeBuddy CN", "codebuddy-sessions.vscdb")     # %APPDATA%（+logs/）
@@ -176,7 +206,9 @@ def _mask(value: str | None) -> str:
 def describe() -> Dict[str, str]:
     """生成当前配置概览（敏感字段已打码），供 `aireport config` 展示。"""
     paths = default_paths()
-    info = [("包根目录", str(ROOT_DIR)), ("报告输出目录", str(REPORTS_DIR))]
+    info = [("包根目录", str(ROOT_DIR)),
+            ("数据目录", str(data_dir())),
+            ("报告输出目录", str(REPORTS_DIR))]
     labels = {
         "CODEBUDDY_CN_DB": "CodeBuddy CN 数据库",
         "WORKBUDDY_DB": "WorkBuddy 数据库",
